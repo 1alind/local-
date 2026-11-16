@@ -18,11 +18,13 @@ In Termux:
 
 ```sh
 pkg update
-pkg install nodejs git
+pkg install nodejs git iproute2
 git clone https://github.com/1alind/local-.git
 cd local-
 npm start
 ```
+
+Before starting, the launcher checks TCP port 8787 and stops any process already listening on that exact port. If the listener belongs to this project's watchdog, it stops the watchdog too so it cannot immediately restart the old server. It uses `ss` from `iproute2`; install that package as shown above. If Termux cannot identify the listener PID, the launcher refuses to guess or kill an unrelated process.
 
 Open the LAN URL printed in Termux from another device on the same Wi-Fi network. The web page starts a shell session automatically.
 
@@ -48,7 +50,9 @@ Press **Check for updates**. The updater fetches the configured GitHub upstream 
 
 ## Reliability
 
-- `npm start` runs a supervisor that restarts the web server after a crash.
+- `npm start` first frees TCP port 8787, then runs a supervisor that restarts the web server after a crash.
+- `npm run start:server` uses the same port-cleanup launcher but starts the server without the supervisor.
+- Termux:Boot uses the same launcher, so startup after reboot follows the same port check.
 - The browser reconnects to the live output stream if the network briefly drops.
 - Terminal sessions close after 30 minutes without input.
 - Up to four shell sessions can exist at once.
