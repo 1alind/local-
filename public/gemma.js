@@ -12,8 +12,18 @@ let conversation = null;
 let loading = false;
 let generating = false;
 let webGpuReady = false;
+let webGpuMessage = "Checking WebGPU support…";
 
 function setStatus(message) { statusEl.textContent = message; }
+function updateLoadState() {
+  const hasFile = !!fileInput.files?.[0];
+  loadBtn.disabled = !hasFile || !webGpuReady || loading || !!engine;
+  if (hasFile && !webGpuReady) {
+    const file = fileInput.files[0];
+    const size = (file.size / (1024 ** 3)).toFixed(2);
+    setStatus("Selected: " + file.name + " (" + size + " GB).\n\nCannot load it yet: " + webGpuMessage);
+  }
+}
 function append(message) {
   chatEl.textContent += message;
   chatEl.scrollTop = chatEl.scrollHeight;
@@ -21,20 +31,26 @@ function append(message) {
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
-  loadBtn.disabled = !file || !webGpuReady || loading || !!engine;
   if (file) {
     const size = (file.size / (1024 ** 3)).toFixed(2);
-    setStatus("Selected: " + file.name + " (" + size + " GB). The model stays on this device.");
+    if (webGpuReady) {
+      setStatus("Selected: " + file.name + " (" + size + " GB). The model stays on this device. Click Load selected model.");
+    }
+  } else {
+    setStatus(webGpuMessage);
   }
+  updateLoadState();
 });
 
 async function checkWebGPU() {
   if (!window.isSecureContext) {
-    setStatus("This page is not in a secure context. WebGPU is blocked on a LAN HTTP address. Open the site through HTTPS, or use localhost on the same device.");
+    webGpuMessage = "This page is not in a secure context. WebGPU is blocked on a LAN HTTP address. Open the site through HTTPS, or use http://127.0.0.1:8787 on the same device.";
+    setStatus(webGpuMessage);
     return false;
   }
   if (!("gpu" in navigator)) {
-    setStatus("WebGPU is unavailable in this browser. The local-file picker works, but LiteRT-LM Web cannot run this model without WebGPU. Try a supported current Chrome/Edge browser.");
+    webGpuMessage = "WebGPU is unavailable in this browser. LiteRT-LM Web cannot run this model without WebGPU. Try a current browser with WebGPU support.";
+    setStatus(webGpuMessage);
     return false;
   }
   try {
@@ -42,10 +58,14 @@ async function checkWebGPU() {
     if (!adapter) throw new Error("No compatible GPU adapter was found.");
     const info = adapter.info || {};
     const name = [info.vendor, info.architecture, info.device].filter(Boolean).join(" ");
-    setStatus("WebGPU ready" + (name ? " (" + name + ")" : "") + ". Choose your .litertlm model file.");
+    webGpuReady = true;
+    webGpuMessage = "WebGPU ready" + (name ? " (" + name + ")" : "") + ".";
+    setStatus(webGpuMessage + " Choose your .litertlm model file.");
+    updateLoadState();
     return true;
   } catch (error) {
-    setStatus("WebGPU check failed: " + error.message);
+    webGpuMessage = "WebGPU check failed: " + error.message;
+    setStatus(webGpuMessage);
     return false;
   }
 }
@@ -72,7 +92,7 @@ loadBtn.addEventListener("click", async () => {
     }
     setStatus("Model failed to load:\n" + (error?.stack || error?.message || String(error)) +
       "\n\nCheck that you selected the Gemma 4 E2B WEB .litertlm file, WebGPU is available, and the device has enough memory.");
-    loadBtn.disabled = !fileInput.files?.[0] || !webGpuReady;
+    updateLoadState();
   } finally {
     loading = false;
   }
@@ -111,4 +131,4 @@ window.addEventListener("pagehide", () => {
 });
 
 webGpuReady = await checkWebGPU();
-loadBtn.disabled = !webGpuReady || !fileInput.files?.[0];
+updateLoadState();
