@@ -1,4 +1,3 @@
-.local-token
 .watchdog.pid
 logs/
 node_modules/
