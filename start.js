@@ -16,7 +16,7 @@ function listeningSocketInodes() {
     try { rows = fs.readFileSync(table, "utf8").trim().split("\n").slice(1); }
     catch { continue; }
     for (const row of rows) {
-      const fields = row.trim().split(/\\s+/);
+      const fields = row.trim().split(/\s+/);
       if (fields.length >= 10 && fields[1]?.toUpperCase().endsWith(":" + wanted) && fields[3] === "0A") {
         inodes.add(fields[9]);
       }
@@ -29,14 +29,14 @@ function findOwners(inodes) {
   const owners = new Set();
   if (!inodes.size) return owners;
   let pids = [];
-  try { pids = fs.readdirSync("/proc").filter(name => /^\\d+$/.test(name)); } catch {}
+  try { pids = fs.readdirSync("/proc").filter(name => /^\d+$/.test(name)); } catch {}
   for (const pid of pids) {
     let fds;
     try { fds = fs.readdirSync(`/proc/${pid}/fd`); } catch { continue; }
     for (const fd of fds) {
       let link;
       try { link = fs.readlinkSync(`/proc/${pid}/fd/${fd}`); } catch { continue; }
-      const match = /^socket:\\[(\\d+)\\]$/.exec(link);
+      const match = /^socket:\[(\d+)\]$/.exec(link);
       if (match && inodes.has(match[1])) owners.add(Number(pid));
     }
   }
@@ -46,9 +46,9 @@ function findOwners(inodes) {
 function processInfo(pid) {
   try {
     const stat = fs.readFileSync(`/proc/${pid}/stat`, "utf8");
-    const tail = stat.slice(stat.lastIndexOf(")") + 2).trim().split(/\\s+/);
+    const tail = stat.slice(stat.lastIndexOf(")") + 2).trim().split(/\s+/);
     const ppid = Number(tail[1]);
-    const cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\\0/g, " ");
+    const cmd = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\0/g, " ");
     return { ppid, cmd };
   } catch { return null; }
 }
