@@ -9,7 +9,6 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
 const PID_FILE = path.join(ROOT, ".watchdog.pid");
 const target = process.argv[2] === "--server-only" ? "server.js" : "watchdog.js";
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function portIsFree() {
   return new Promise((resolve, reject) => {
