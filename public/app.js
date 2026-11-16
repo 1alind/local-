@@ -7,7 +7,6 @@ let sessionId = null;
 let events = null;
 let creatingSession = false;
 let sending = false;
-let autoUpdateStarted = false;
 const MAX_DISPLAY = 500000;
 
 function setStatus(online, label) {
@@ -54,7 +53,6 @@ async function checkStatus() {
   $("platform").textContent = info.platform || "";
   setStatus(true, "Termux connected");
   $("dashboard").classList.remove("hidden");
-  void autoCheckUpdates();
   return info;
 }
 function connectEvents() {
@@ -136,42 +134,6 @@ $("interrupt").addEventListener("click", async () => {
   catch (error) { appendOutput("\n[Interrupt failed: " + error.message + "]\n"); }
 });
 $("clear").addEventListener("click", () => { $("output").textContent = ""; });
-async function autoCheckUpdates() {
-  if (autoUpdateStarted) return;
-  autoUpdateStarted = true;
-  try {
-    const result = await api("/api/update", { method: "POST", body: "{}" });
-    console.info("[update] Automatic update check started:", result.message || "checking");
-  } catch (error) {
-    if (!/already running/i.test(error.message)) {
-      console.warn("[update] Could not start automatic update check:", error.message);
-      return;
-    }
-  }
-
-  const started = Date.now();
-  while (Date.now() - started < 180000) {
-    try {
-      const status = await api("/api/update/status");
-      if (status.status === "up_to_date") {
-        console.info("[update]", status.message || "Already up to date.");
-        return;
-      }
-      if (status.status === "updated") {
-        console.info("[update]", status.message || "Update installed. Server restarting.");
-        return;
-      }
-      if (status.status === "failed" || status.status === "restore_needed") {
-        console.warn("[update]", status.message || "Automatic update failed.");
-        return;
-      }
-    } catch {
-      // The server may briefly disconnect while the watchdog restarts it.
-    }
-    await new Promise(resolve => setTimeout(resolve, 1500));
-  }
-  console.warn("[update] Automatic update check is taking longer than expected.");
-}
 window.addEventListener("online", scheduleReconnect);
 window.addEventListener("offline", () => setStatus(false, "Network offline"));
 window.addEventListener("error", event => appendOutput("\n[Dashboard error: " + (event.message || "unknown error") + "]\n"));
