@@ -123,7 +123,7 @@ async function main() {
     let parentCommand = "";
     try {
       parentCommand = fs.readFileSync(`/proc/${parentPid}/cmdline`, "utf8")
-        .split("\\0").filter(Boolean).join(" ");
+        .split("\0").filter(Boolean).join(" ");
     } catch {}
     if (parentCommand.includes(path.join(ROOT, "server.js"))) {
       try { process.kill(parentPid, "SIGTERM"); }
