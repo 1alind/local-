@@ -13,9 +13,21 @@ function run(command, args) {
 }
 
 function listeners() {
-  const result = run("ss", ["-H", "-ltnp", "sport", "=", ":" + PORT]);
+  // Avoid ss filter syntax differences between Android/Termux builds.
+  const result = run("ss", ["-H", "-ltnp"]);
   if (result.error) throw new Error("Cannot run ss: " + result.error.message);
-  return (result.stdout || "").trim();
+  if (result.status !== 0) {
+    throw new Error("ss failed: " + (result.stderr || result.stdout || "unknown error").trim());
+  }
+  return (result.stdout || "").split("\n").filter(line => {
+    const fields = line.trim().split(/\s+/);
+    return fields.length >= 4 && fields[3].endsWith(":" + PORT);
+  }).join("\n").trim();
+}
+
+function report(command, args, result) {
+  const output = [result.stdout, result.stderr].filter(Boolean).join("\n").trim();
+  console.log(`[start] ${command} ${args.join(" ")} => exit ${result.status ?? "unknown"}${output ? "\n" + output : ""}`);
 }
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -23,39 +35,40 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function clearPort() {
   console.log(`[start] Checking TCP port ${PORT}...`);
 
-  // Stop this project's old watchdog first so it cannot respawn its HTTP server.
-  run("pkill", ["-TERM", "-f", path.join(ROOT, "watchdog.js")]);
+  // Stop this project's supervisor first, otherwise it can respawn its server.
+  const watchdog = run("pkill", ["-TERM", "-f", "watchdog[.]js"]);
+  if (watchdog.status === 0) console.log("[start] Stopped existing watchdog process.");
 
   let active = listeners();
   if (active) {
-    console.log("[start] Existing listener(s):");
-    console.log(active);
+    console.log("[start] Existing listener(s):\n" + active);
 
-    // fuser targets only processes holding this TCP port.
-    run("fuser", ["-k", "-TERM", `${PORT}/tcp`]);
-    await sleep(2500);
+    // Termux fuser syntax: fuser -k -SIGNAL -n tcp PORT
+    const term = run("fuser", ["-k", "-TERM", "-n", "tcp", String(PORT)]);
+    report("fuser", ["-k", "-TERM", "-n", "tcp", String(PORT)], term);
+    for (let i = 0; i < 25 && listeners(); i++) await sleep(100);
 
     active = listeners();
     if (active) {
-      console.log("[start] Listener did not exit after SIGTERM. Sending SIGKILL.");
-      run("fuser", ["-k", "-KILL", `${PORT}/tcp`]);
+      console.log("[start] Still listening. Escalating to SIGKILL.");
+      const hard = run("fuser", ["-k", "-KILL", "-n", "tcp", String(PORT)]);
+      report("fuser", ["-k", "-KILL", "-n", "tcp", String(PORT)], hard);
       await sleep(500);
     }
   }
 
   active = listeners();
   if (active) {
-    throw new Error(`Port ${PORT} is still occupied. Server not started:\\n${active}`);
+    throw new Error(`Port ${PORT} is STILL occupied. HTTP server will NOT start. Remaining listener:\n${active}`);
   }
-  console.log(`[start] Port ${PORT} is free.`);
+  console.log(`[start] Verified: TCP port ${PORT} is free.`);
 }
 
 async function main() {
   if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error("Invalid PORT value.");
   for (const command of ["ss", "fuser", "pkill"]) {
-    if (run("sh", ["-c", "command -v " + command]).status !== 0) {
-      throw new Error(`Required Termux command not found: ${command}`);
-    }
+    const check = run("sh", ["-c", "command -v " + command]);
+    if (check.status !== 0) throw new Error(`Required command not found: ${command}`);
   }
 
   await clearPort();
