@@ -25,6 +25,18 @@ npm start
 
 The watchdog starts the web server and restarts it if it exits. The first start creates `.local-token` and prints the private dashboard token. Keep it secret. Open the LAN URL printed in Termux from another device on the same Wi-Fi, then paste the token.
 
+## Update from the dashboard
+
+After installing this project with Git, connect to the dashboard and press **Check for updates**. The updater fetches the configured GitHub upstream, checks whether newer commits exist, and applies them only with a fast-forward update. The watchdog then restarts the server so the new code is loaded.
+
+- The updater refuses to overwrite uncommitted local changes.
+- It does not run arbitrary downloaded shell scripts or install extra npm packages.
+- If there is no newer commit, the current server keeps running.
+- Update details are appended to `logs/update.log`.
+- Keep Termux running and the phone connected to the network during the update.
+
+If an update is refused because local files have changed, back up or commit those changes before trying again. The update button requires this project to have been installed with `git clone` and to have a configured Git upstream.
+
 ## Recovery and reliability
 
 - `npm start` runs a supervisor that restarts the server after a crash, with a backoff delay.
