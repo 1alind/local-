@@ -1,4 +1,6 @@
 const $ = id => document.getElementById(id);
+const gemmaLink = $("gemmaLink");
+if (gemmaLink) gemmaLink.href = "https://" + location.hostname + ":8788/gemma.html";
 let retryTimer = null;
 let retryDelay = 2000;
 let sessionId = null;
