@@ -50,7 +50,7 @@ function ensureLanTls() {
       "CN = Termux LAN Server", "[server_ext]", "subjectAltName = @alt_names",
       "keyUsage = digitalSignature, keyEncipherment", "extendedKeyUsage = serverAuth",
       "[alt_names]", altNames, ""
-    ].join("\\n");
+    ].join("\n");
     const configFile = path.join(CERT_DIR, "server-openssl.cnf");
     const csrFile = path.join(CERT_DIR, "server.csr");
     fs.writeFileSync(configFile, config);
