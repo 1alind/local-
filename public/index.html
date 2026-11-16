@@ -44,8 +44,9 @@
       <div class="meta"><span id="device">Device: waiting</span><span id="platform"></span></div>
     </div>
     <div class="panel">
-      <div class="headrow"><h2>Local AI model</h2><a id="gemmaLink" href="/gemma.html"><button class="primary" type="button">Open Gemma 4 E2B</button></a></div>
-      <p class="hint">For WebGPU on another device, first <a href="/lan-ca.crt" download>download the local HTTPS certificate</a> and trust it on this browser device. Then open Gemma securely. The model file is selected from this device and is never uploaded.</p>
+      <div class="headrow"><h2>Local AI model</h2><div class="actions"><a id="gemmaLink" href="/gemma.html"><button class="primary" type="button">Open WebGPU Gemma</button></a><a href="/gemma-api.html"><button type="button">Open Gemma API Chat</button></a></div></div>
+      <p class="hint">WebGPU runs a model selected from this device. Gemma API Chat sends prompts to your local API on port 23456.</p>
+      <p class="hint">For WebGPU on another device, first <a href="/lan-ca.crt" download>download the local HTTPS certificate</a> and trust it on this browser device.</p>
     </div>
   </section>
   <p class="hint">LAN only, without a password. Anyone on the same private Wi-Fi can run commands with your Termux permissions. Use only on a trusted network. Do not expose port 8787 to the internet.</p>
