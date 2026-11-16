@@ -2,6 +2,7 @@ const statusEl = document.querySelector("#status");
 const chatEl = document.querySelector("#chat");
 const loadBtn = document.querySelector("#load");
 const clearBtn = document.querySelector("#clear");
+const fileInput = document.querySelector("#modelFile");
 const form = document.querySelector("#form");
 const promptEl = document.querySelector("#prompt");
 const sendBtn = document.querySelector("#send");
@@ -10,47 +11,56 @@ let engine = null;
 let conversation = null;
 let loading = false;
 let generating = false;
+let webGpuReady = false;
 
-function setStatus(message) {
-  statusEl.textContent = message;
-}
+function setStatus(message) { statusEl.textContent = message; }
 function append(message) {
   chatEl.textContent += message;
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files?.[0];
+  loadBtn.disabled = !file || !webGpuReady || loading || !!engine;
+  if (file) {
+    const size = (file.size / (1024 ** 3)).toFixed(2);
+    setStatus("Selected: " + file.name + " (" + size + " GB). The model stays on this device.");
+  }
+});
+
 async function checkWebGPU() {
+  if (!window.isSecureContext) {
+    setStatus("This page is not in a secure context. WebGPU is blocked on a LAN HTTP address. Open the site through HTTPS, or use localhost on the same device.");
+    return false;
+  }
   if (!("gpu" in navigator)) {
-    setStatus("WebGPU is not available in this browser. Try a current Chrome or Edge build on a supported device.");
-    loadBtn.disabled = true;
+    setStatus("WebGPU is unavailable in this browser. The local-file picker works, but LiteRT-LM Web cannot run this model without WebGPU. Try a supported current Chrome/Edge browser.");
     return false;
   }
   try {
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) throw new Error("No compatible GPU adapter was found.");
     const info = adapter.info || {};
-    const gpuName = [info.vendor, info.architecture, info.device].filter(Boolean).join(" ");
-    setStatus("WebGPU is available" + (gpuName ? " (" + gpuName + ")" : "") + ". Ready to load the model.");
+    const name = [info.vendor, info.architecture, info.device].filter(Boolean).join(" ");
+    setStatus("WebGPU ready" + (name ? " (" + name + ")" : "") + ". Choose your .litertlm model file.");
     return true;
   } catch (error) {
     setStatus("WebGPU check failed: " + error.message);
-    loadBtn.disabled = true;
     return false;
   }
 }
 
 loadBtn.addEventListener("click", async () => {
-  if (loading || engine) return;
+  const file = fileInput.files?.[0];
+  if (!file || loading || engine) return;
   loading = true;
   loadBtn.disabled = true;
-  setStatus("Loading LiteRT-LM and downloading Gemma 4 E2B (~2 GB). This can take a while. Do not close this tab.");
+  setStatus("Loading " + file.name + " from your device. This may take a while. The file is not uploaded.");
   try {
     const { Engine } = await import("https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm");
-    engine = await Engine.create({
-      model: "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm"
-    });
+    engine = await Engine.create({ model: file });
     conversation = await engine.createConversation();
-    setStatus("Gemma 4 E2B is loaded. Prompts are processed locally on this device.");
+    setStatus("Model loaded. Prompts are processed locally in this browser.");
     promptEl.disabled = false;
     sendBtn.disabled = false;
     loadBtn.textContent = "Model loaded";
@@ -61,8 +71,8 @@ loadBtn.addEventListener("click", async () => {
       engine = null;
     }
     setStatus("Model failed to load:\n" + (error?.stack || error?.message || String(error)) +
-      "\n\nCheck WebGPU support, available memory, internet access, and the browser console. You can try loading again.");
-    loadBtn.disabled = false;
+      "\n\nCheck that you selected the Gemma 4 E2B WEB .litertlm file, WebGPU is available, and the device has enough memory.");
+    loadBtn.disabled = !fileInput.files?.[0] || !webGpuReady;
   } finally {
     loading = false;
   }
@@ -100,4 +110,5 @@ window.addEventListener("pagehide", () => {
   if (engine) engine.delete().catch(() => {});
 });
 
-checkWebGPU();
+webGpuReady = await checkWebGPU();
+loadBtn.disabled = !webGpuReady || !fileInput.files?.[0];
