@@ -1,12 +1,10 @@
 import { spawn } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.join(ROOT, "server.js");
-const TOKEN_FILE = path.join(ROOT, ".local-token");
 const PORT = Number(process.env.PORT || 8787);
 let child = null, stopping = false, failures = 0, restartDelay = 1000;
 let restartTimer = null, healthTimer = null, consecutiveHealthFailures = 0;
@@ -14,11 +12,8 @@ let restartTimer = null, healthTimer = null, consecutiveHealthFailures = 0;
 function log(...args) { console.log(new Date().toISOString(), "[watchdog]", ...args); }
 
 function healthCheck() {
-  let token = "";
-  try { token = fs.readFileSync(TOKEN_FILE, "utf8").trim(); } catch { return; }
   const request = http.get({
-    host: "127.0.0.1", port: PORT, path: "/api/status", timeout: 4000,
-    headers: { Authorization: "Bearer " + token }
+    host: "127.0.0.1", port: PORT, path: "/api/status", timeout: 4000
   }, response => {
     response.resume();
     if (response.statusCode === 200) consecutiveHealthFailures = 0;
