@@ -24,7 +24,7 @@ cd local-
 npm start
 ```
 
-The launcher checks TCP port 8787 before starting. It uses available system process tools to identify and stop an existing listener; it does not install additional packages. If it cannot identify the listener PID, it refuses to guess or kill an unrelated process.
+Before launching the HTTP server, the launcher checks Linux's `/proc/net/tcp` and `/proc/net/tcp6` tables, maps listening socket inodes to process IDs through `/proc/*/fd`, and terminates the process(es) holding TCP port 8787. It also stops a parent project watchdog first so it cannot respawn the old server. This uses Node.js and the Android/Linux proc filesystem only; no extra Termux packages or utilities are required. If the port remains occupied after termination, startup aborts and prints the remaining PID(s).
 
 Open the LAN URL printed in Termux from another device on the same Wi-Fi network. The web page starts a shell session automatically.
 
@@ -50,7 +50,7 @@ Press **Check for updates**. The updater fetches the configured GitHub upstream 
 
 ## Reliability
 
-- `npm start` first frees TCP port 8787, then runs a supervisor that restarts the web server after a crash.
+- `npm start` identifies and terminates existing listeners on TCP port 8787 before starting the supervisor that restarts the web server after a crash.
 - `npm run start:server` uses the same port-cleanup launcher but starts the server without the supervisor.
 - Termux:Boot uses the same launcher, so startup after reboot follows the same port check.
 - The browser reconnects to the live output stream if the network briefly drops.
