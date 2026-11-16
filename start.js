@@ -5,7 +5,7 @@ import net from "node:net";
 import { spawn } from "node:child_process";
 
 const ROOT = path.dirname(new URL(import.meta.url).pathname);
-const PORT = Number(process.env.PORT || 8787);
+const DEFAULT_PORT = Number(process.env.PORT || 8787);
 const PID_FILE = path.join(ROOT, ".watchdog.pid");
 const target = process.argv[2] === "--server-only" ? "server.js" : "watchdog.js";
 
@@ -34,65 +34,72 @@ function signalOwnedPid(pid, signal) {
   }
 }
 
-function portIsFree() {
+function portIsFree(port) {
   return new Promise((resolve, reject) => {
     const probe = net.createServer();
     probe.once("error", error => {
       if (error.code === "EADDRINUSE" || error.code === "EACCES") resolve(false);
       else reject(error);
     });
-    probe.listen({ host: "0.0.0.0", port: PORT, exclusive: true }, () => {
+    probe.listen({ host: "0.0.0.0", port, exclusive: true }, () => {
       probe.close(error => error ? reject(error) : resolve(true));
     });
   });
 }
 
-async function clearPort() {
-  console.log(`[start] Checking TCP port ${PORT}...`);
-
-  // First stop the supervisor recorded by this project.
+async function stopOldProjectProcesses() {
   try {
     const oldPid = Number(fs.readFileSync(PID_FILE, "utf8").trim());
     signalOwnedPid(oldPid, "SIGTERM");
   } catch {}
 
-  // Also stop orphaned processes belonging to this exact project directory.
-  // pkill is used only with this project's full script paths, never by port number.
   for (const script of ["watchdog.js", "server.js"]) {
     const pattern = path.join(ROOT, script).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const result = await new Promise(resolve => {
+    await new Promise(resolve => {
       const child = spawn("pkill", ["-TERM", "-f", pattern], { stdio: "ignore" });
-      child.once("error", () => resolve(null));
-      child.once("exit", code => resolve(code));
+      child.once("error", () => resolve());
+      child.once("exit", code => {
+        if (code === 0) console.log(`[start] Stopped old ${script} process(es).`);
+        resolve();
+      });
     });
-    if (result === 0) console.log(`[start] Stopped old ${script} process(es).`);
+  }
+}
+
+async function choosePort() {
+  if (!Number.isInteger(DEFAULT_PORT) || DEFAULT_PORT < 1 || DEFAULT_PORT > 65535) {
+    throw new Error("Invalid PORT value.");
   }
 
-  for (let i = 0; i < 40; i++) {
-    if (await portIsFree()) {
-      try { fs.unlinkSync(PID_FILE); } catch {}
-      console.log(`[start] Verified: port ${PORT} is free.`);
-      return;
-    }
-    await sleep(250);
-  }
+  console.log(`[start] Checking preferred port ${DEFAULT_PORT}...`);
+  if (await portIsFree(DEFAULT_PORT)) return DEFAULT_PORT;
 
-  throw new Error(
-    `Port ${PORT} is still occupied after stopping this project's old processes.\n` +
-    "Android does not allow this app to inspect or kill arbitrary socket owners. " +
-    "The remaining listener is not confirmed to belong to this project, so it was left untouched."
-  );
+  console.log(`[start] Port ${DEFAULT_PORT} is occupied. Searching ${DEFAULT_PORT + 1}-${Math.min(DEFAULT_PORT + 20, 65535)}...`);
+  for (let port = DEFAULT_PORT + 1; port <= Math.min(DEFAULT_PORT + 20, 65535); port++) {
+    if (await portIsFree(port)) return port;
+  }
+  throw new Error(`Ports ${DEFAULT_PORT}-${Math.min(DEFAULT_PORT + 20, 65535)} are all occupied. No server was started.`);
 }
 
 async function main() {
-  if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) throw new Error("Invalid PORT value.");
-  await clearPort();
+  await stopOldProjectProcesses();
 
+  let selectedPort = null;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    selectedPort = await choosePort();
+    if (await portIsFree(selectedPort)) break;
+    selectedPort = null;
+    await sleep(100);
+  }
+  if (!selectedPort) throw new Error("Could not reserve a free port.");
+
+  const childEnv = { ...process.env, PORT: String(selectedPort) };
+  fs.writeFileSync(path.join(ROOT, ".active-port"), String(selectedPort));
   const child = spawn(process.execPath, [path.join(ROOT, target)], {
-    cwd: ROOT, env: process.env, stdio: "inherit"
+    cwd: ROOT, env: childEnv, stdio: "inherit"
   });
   fs.writeFileSync(PID_FILE, String(child.pid));
-  console.log(`[start] Starting ${target} (PID ${child.pid}).`);
+  console.log(`[start] Starting ${target} on port ${selectedPort} (PID ${child.pid}).`);
 
   let stopping = false;
   for (const signal of ["SIGINT", "SIGTERM"]) {
