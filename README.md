@@ -1,13 +1,14 @@
-# Local LAN Control
+# Termux Web Terminal
 
-A LAN-only dashboard and supervised Node.js service for an Android phone running Termux. Open it from another device on the same Wi-Fi network.
+A browser-based terminal for an Android phone running Termux. Open the page from another device on the same trusted Wi-Fi network, enter commands, and watch output stream back while commands run.
 
 ## Requirements
 
 - Android with Termux
 - Node.js 20 or newer
+- Bash available in Termux (normally installed by default)
 - Phone and browser device on the same private Wi-Fi network
-- Optional: Termux:Boot (install from the same trusted source as Termux) for automatic startup after reboot
+- Optional: Termux:Boot for startup after reboot
 
 No cloud account, domain, public hosting, database, or npm dependencies are required.
 
@@ -23,90 +24,48 @@ cd local-
 npm start
 ```
 
-The watchdog starts the web server and restarts it if it exits. Open the LAN URL printed in Termux from another device on the same private Wi-Fi network. No login or token is required.
+Open the LAN URL printed in Termux from another device on the same Wi-Fi network. The web page starts a shell session automatically.
+
+## Using the terminal
+
+- Enter commands in the box and press Enter.
+- Output and errors stream into the terminal as they happen.
+- Commands that ask for text input can receive it through the same input box.
+- Use **Ctrl+C** to interrupt the current command.
+- Use **New session** if the shell exits.
+- Shift+Enter inserts a newline in the input box.
+
+The shell runs as the Termux app user, with the same permissions and access as commands typed directly into Termux. This implementation connects to an interactive Bash process through pipes, not a real pseudo-terminal (PTY). Most command-line tools and text prompts work, but full-screen terminal programs or tools that require a real TTY (for example vim, nano, or interactive top) may not work correctly. Terminal escape sequences are displayed as text rather than rendered by a full terminal emulator.
 
 ## Update from the dashboard
 
-After installing this project with Git, connect to the dashboard and press **Check for updates**. The updater fetches the configured GitHub upstream, checks whether newer commits exist, and applies them only with a fast-forward update. The watchdog then restarts the server so the new code is loaded.
+Press **Check for updates**. The updater fetches the configured GitHub upstream and applies changes only with a fast-forward update. The watchdog restarts the server to load the new code.
 
 - The updater refuses to overwrite uncommitted local changes.
-- It does not run arbitrary downloaded shell scripts or install extra npm packages.
-- If there is no newer commit, the current server keeps running.
+- It does not run arbitrary downloaded shell scripts or install npm packages.
 - Update details are appended to `logs/update.log`.
-- Keep Termux running and the phone connected to the network during the update.
 
-If an update is refused because local files have changed, back up or commit those changes before trying again. The update button requires this project to have been installed with `git clone` and to have a configured Git upstream.
+## Reliability
 
-## Recovery and reliability
+- `npm start` runs a supervisor that restarts the web server after a crash.
+- The browser reconnects to the live output stream if the network briefly drops.
+- Terminal sessions close after 30 minutes without input.
+- Up to four shell sessions can exist at once.
+- Android may still stop Termux due to battery management, force-stop, reboot, or low memory. Set Termux battery use to Unrestricted and use Termux:Boot if desired.
 
-- `npm start` runs a supervisor that restarts the server after a crash, with a backoff delay.
-- The supervisor checks the server health every 20 seconds and restarts it after repeated failed checks.
-- HTTP request errors, malformed requests, missing files, command failures, and command timeouts are handled without intentionally taking down the server.
-- The browser uses request timeouts and automatically retries a lost connection.
-- Logs are written to the Termux session when started manually.
-
-### Keep it running after you leave Termux
-
-For Android background operation, run this once in Termux:
-
-```sh
-termux-wake-lock
-```
-
-Then open Android Settings and set **Termux** battery usage to **Unrestricted** (wording differs by Android version). Allow background activity and auto-start if your phone has those controls.
-
-### Start automatically after Android reboot
-
-1. Install the **Termux:Boot** companion app from the same trusted source as your Termux installation.
-2. Open Termux:Boot once so Android registers it.
-3. In Termux, run:
-
-```sh
-mkdir -p ~/.termux/boot
-cp ~/local-/boot/start-local-control ~/.termux/boot/start-local-control
-chmod +x ~/.termux/boot/start-local-control
-```
-
-4. Reboot the phone. Termux:Boot will start the supervisor, acquire a wake lock, and write logs to `~/local-/logs/supervisor.log`.
-
-To inspect logs:
-
-```sh
-tail -n 100 ~/local-/logs/supervisor.log
-```
-
-To stop the background supervisor:
+To stop the supervisor:
 
 ```sh
 cd ~/local-
 sh stop.sh
 ```
 
-To run interactively again:
+## Security warning
 
-```sh
-cd ~/local-
-npm start
-```
+There is no login or token, as requested. **Any device on the same private LAN can execute arbitrary commands as the Termux app user.** This is substantially more powerful than the previous diagnostics-only dashboard. Do not use this on public/shared Wi-Fi, do not enable router port forwarding, and stop the server when you do not need remote access.
 
-## Important Android limitation
+## Notes
 
-No Termux app can guarantee 100% uptime. Android can still stop it if you force-stop Termux, the manufacturer aggressively kills background apps, the phone reboots without Termux:Boot working, storage is unavailable, or the device runs out of resources. The watchdog recovers Node server crashes while the supervisor itself is alive; Termux:Boot and battery settings improve recovery after reboot/background restrictions. Do not force-stop Termux if you want the service available.
-
-## Security
-
-- The server listens on the phone's LAN interfaces on port 8787.
-- There is no login or token. Any device on the same private LAN can use the dashboard and its limited diagnostic/update actions.
-- API requests from non-private IP ranges are rejected.
-- The first version exposes only a limited diagnostic command allowlist, not an unrestricted shell.
-- Do not configure router port forwarding for port 8787. Avoid untrusted/public Wi-Fi because other devices on the same network can access the dashboard.
-
-## Available commands
-
-- Current directory and home directory listing
-- Storage and memory usage
-- Uptime and system information
-- Node.js and npm versions
-- Termux diagnostics
-
-This is the first supervised LAN version. New remote actions should be added through explicit, narrow allowlists rather than exposing arbitrary shell execution.
+- The server listens on port 8787 and rejects API requests from non-private IP ranges.
+- The terminal uses Bash stdin/stdout pipes rather than a PTY, so it is a live command console but not a complete xterm replacement.
+- No physical Android device test has been performed as part of these repository changes.
