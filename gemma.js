@@ -120,6 +120,8 @@ loadBtn.addEventListener("click", async () => {
       try { await engine.delete(); } catch {}
       engine = null;
     }
+    progressFill.classList.remove("busy");
+    progressPhase.textContent = "Loading failed";
     setStatus("Model failed to load:\n" + (error?.stack || error?.message || String(error)) +
       "\n\nCheck that you selected the Gemma 4 E2B WEB .litertlm file, WebGPU is available, and the device has enough memory.");
     updateLoadState();
