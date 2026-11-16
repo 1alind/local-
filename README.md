@@ -43,7 +43,8 @@ Press **Check for updates**. The updater fetches the configured GitHub upstream 
 
 - The updater refuses to overwrite uncommitted local changes.
 - It does not run arbitrary downloaded shell scripts or install npm packages.
-- Update details are appended to `logs/update.log`.
+- Update details are appended to `logs/update.log`, and the dashboard displays checking, success, up-to-date, and failure states.
+- A legacy `.local-token` file is ignored so it cannot block updates.
 
 ## Reliability
 
