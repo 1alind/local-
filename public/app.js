@@ -24,7 +24,8 @@ function scheduleReconnect() {
     try {
       await checkStatus();
       retryDelay = 2000;
-      if (sessionId && (!events || events.readyState === EventSource.CLOSED)) connectEvents();
+      if (!sessionId && !creatingSession) await startTerminal();
+      else if (sessionId && (!events || events.readyState === EventSource.CLOSED)) connectEvents();
     } catch {
       retryDelay = Math.min(retryDelay * 1.7, 30000);
       scheduleReconnect();
