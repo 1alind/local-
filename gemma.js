@@ -107,7 +107,7 @@ loadBtn.addEventListener("click", async () => {
       }
     }));
     engine = await Engine.create({ model: modelStream });
-    setProgress(94, "Initializing model on the GPU…");
+    setProgress(96, "Preparing chat session…");
     conversation = await engine.createConversation();
     setProgress(100, "Model ready", false);
     setStatus("Model loaded. Prompts are processed locally in this browser.");
