@@ -32,7 +32,17 @@ sh start.sh
 
 The launcher starts the Node.js watchdog, which runs and monitors only this project's `server.js`. If port 8787 is already occupied, startup stops with an error. It does not kill other Node.js processes, Termux processes, or unrelated apps.
 
-Open the LAN URL printed in Termux from another device on the same Wi-Fi network. The web page starts a shell session automatically.
+Open the HTTP LAN URL printed in Termux from another device on the same Wi-Fi network. The web page starts a shell session automatically.
+
+## Secure LAN access for WebGPU
+
+The server also starts HTTPS on port **8788**. This is required for browser features such as WebGPU when the browser is on a different device.
+
+1. On the browser device, open `http://PHONE-IP:8787/lan-ca.crt` and download the local CA certificate.
+2. Install and trust that certificate on the browser device. On macOS, add it to the System keychain using Keychain Access, open the certificate, expand Trust, and set **When using this certificate** to **Always Trust**. On iPhone/iPad, install the downloaded profile in Settings, then enable full trust under Certificate Trust Settings.
+3. Open `https://PHONE-IP:8788/gemma.html` using the phone's current LAN IP printed in Termux.
+
+The CA private key stays in the Termux project's ignored `certs/` directory. The model file is still selected and read locally by the browser; it is not uploaded. If the phone's LAN IP changes, restart the server so it can issue a certificate for the new address. Keep the CA certificate private to your own devices and trusted network.
 
 ## Using the terminal
 
@@ -78,6 +88,6 @@ There is no login or token, as requested. **Any device on the same private LAN c
 
 ## Notes
 
-- The server listens on port 8787 and rejects API requests from non-private IP ranges.
+- The HTTP dashboard listens on port 8787; HTTPS for WebGPU listens on port 8788. Both reject API requests from non-private IP ranges.
 - The terminal uses Bash stdin/stdout pipes rather than a PTY, so it is a live command console but not a complete xterm replacement.
 - No physical Android device test has been performed as part of these repository changes.
