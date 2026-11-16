@@ -44,7 +44,7 @@ function ensureLanTls() {
     const ips = Object.values(os.networkInterfaces()).flat().filter(Boolean)
       .filter(item => item.family === "IPv4" && !item.internal).map(item => item.address);
     const uniqueIps = [...new Set(["127.0.0.1", ...ips])];
-    const altNames = uniqueIps.map((ip, i) => `IP.${i + 1} = ${ip}`).join("\\n");
+    const altNames = uniqueIps.map((ip, i) => `IP.${i + 1} = ${ip}`).join("\n");
     const config = [
       "[req]", "distinguished_name = dn", "prompt = no", "[dn]",
       "CN = Termux LAN Server", "[server_ext]", "subjectAltName = @alt_names",
@@ -257,6 +257,12 @@ const requestHandler = (req, res) => {
 const server = http.createServer(requestHandler);
 const tls = ensureLanTls();
 const secureServer = tls ? https.createServer({ key: tls.key, cert: tls.cert }, requestHandler) : null;
+if (secureServer) {
+  secureServer.on("error", error => {
+    console.error("[https] HTTPS listener failed:", error.message);
+    console.error("[https] HTTP dashboard remains available on port " + PORT);
+  });
+}
 
 async function handleRequest(req, res) {
   let url;
@@ -358,7 +364,7 @@ async function handleRequest(req, res) {
   const types = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
     ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
-    ".png": "image/png", ".ico": "image/x-icon"
+    ".png": "image/png", ".ico": "image/x-icon", ".crt": "application/x-x509-ca-cert"
   };
   res.writeHead(200, {
     "Content-Type": types[path.extname(file)] || "application/octet-stream",
@@ -398,10 +404,9 @@ function shutdown() {
     try { session.child.kill("SIGTERM"); } catch {}
   }
   server.close(() => {
-    if (secureServer) secureServer.close(() => process.exit(0));
-    else process.exit(0);
+    if (!secureServer) process.exit(0);
   });
-  if (secureServer) secureServer.close();
+  if (secureServer) secureServer.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000).unref();
 }
 process.on("SIGTERM", shutdown);
