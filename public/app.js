@@ -97,7 +97,7 @@ async function startTerminal() {
         const existing = await api("/api/terminal/session?id=" + encodeURIComponent(savedId));
         if (existing.active) {
           sessionId = savedId;
-          appendOutput("\\n[Reconnected to existing terminal session]\\n");
+          appendOutput("\n[Reconnected to existing terminal session]\n");
           connectEvents();
           return;
         }
