@@ -272,6 +272,41 @@ async function handleRequest(req, res) {
   if (url.pathname.startsWith("/api/")) {
     if (!isPrivateAddress(req.socket.remoteAddress || "")) return reply(res, 403, { error: "Private network connections only" });
 
+    if (req.method === "GET" && url.pathname === "/api/gemma/health") {
+      const upstream = http.get({ host: "127.0.0.1", port: 23456, path: "/health", timeout: 5000 }, upstreamRes => {
+        res.writeHead(upstreamRes.statusCode || 502, {
+          "Content-Type": upstreamRes.headers["content-type"] || "application/json",
+          "Cache-Control": "no-store"
+        });
+        upstreamRes.pipe(res);
+      });
+      upstream.on("timeout", () => upstream.destroy(new Error("Gemma API health check timed out")));
+      upstream.on("error", error => {
+        if (!res.headersSent) reply(res, 502, { error: "Gemma API is unreachable: " + error.message });
+        else res.end();
+      });
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/gemma/chat/stream") {
+      const upstream = http.request({
+        host: "127.0.0.1", port: 23456, path: "/api/chat/stream", method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" }
+      }, upstreamRes => {
+        res.writeHead(upstreamRes.statusCode || 502, {
+          "Content-Type": upstreamRes.headers["content-type"] || "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive", "X-Accel-Buffering": "no"
+        });
+        upstreamRes.pipe(res);
+      });
+      upstream.on("error", error => {
+        if (!res.headersSent) reply(res, 502, { error: "Gemma API is unreachable: " + error.message });
+        else res.end();
+      });
+      req.on("aborted", () => upstream.destroy());
+      res.on("close", () => { if (!res.writableEnded) upstream.destroy(); });
+      req.pipe(upstream);
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/status") {
       return reply(res, 200, {
         online: true, device: os.hostname(),
