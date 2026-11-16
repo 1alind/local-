@@ -2,11 +2,9 @@ const $ = id => document.getElementById(id);
 let token = sessionStorage.getItem("lan-control-token") || "";
 let retryTimer = null;
 let retryDelay = 2000;
-let connected = false;
 let busy = false;
 
 function setStatus(online, label) {
-  connected = online;
   $("status").classList.toggle("online", online);
   $("status").innerHTML = '<span class="dot"></span>' + label;
 }
@@ -40,9 +38,7 @@ async function api(path, options = {}) {
     if (response.status === 401) throw new Error("Wrong token. Paste the token printed in Termux.");
     if (!response.ok) throw new Error(data.error || "Request failed: " + response.status);
     return data;
-  } finally {
-    clearTimeout(timeout);
-  }
+  } finally { clearTimeout(timeout); }
 }
 async function checkStatus() {
   const info = await api("/api/status");
@@ -65,8 +61,11 @@ async function connect() {
     $("output").textContent = "Connected. Select a diagnostic command.";
   } catch (error) {
     setStatus(false, "Connection failed");
-    $("output").textContent = error.name === "AbortError" ? "Connection timed out. Check that Termux is running and both devices are on the same Wi-Fi." : error.message;
+    $("output").textContent = error.name === "AbortError"
+      ? "Connection timed out. Check Termux and the Wi-Fi connection."
+      : error.message;
     $("login").classList.remove("hidden");
+    if (!/wrong token/i.test(error.message)) scheduleReconnect();
   }
 }
 async function run(command, button) {
@@ -76,10 +75,7 @@ async function run(command, button) {
   $("output").textContent = "Running " + label + "...";
   document.querySelectorAll(".cmd").forEach(item => item.disabled = true);
   try {
-    const result = await api("/api/run", {
-      method: "POST",
-      body: JSON.stringify({ command })
-    });
+    const result = await api("/api/run", { method: "POST", body: JSON.stringify({ command }) });
     const parts = [];
     if (result.stdout) parts.push(result.stdout.trimEnd());
     if (result.stderr) parts.push("[stderr]\n" + result.stderr.trimEnd());
@@ -88,16 +84,16 @@ async function run(command, button) {
     $("output").textContent = parts.join("\n\n") + "\n\nExit code: " + result.code;
     setStatus(true, "Phone connected");
   } catch (error) {
-    $("output").textContent = error.name === "AbortError" ? "The request timed out. The phone may be busy or disconnected." : error.message;
+    $("output").textContent = error.name === "AbortError"
+      ? "The request timed out. The phone may be busy or disconnected."
+      : error.message;
     setStatus(false, "Reconnecting…");
     if (/wrong token/i.test(error.message)) {
       sessionStorage.removeItem("lan-control-token");
       token = "";
       $("dashboard").classList.add("hidden");
       $("login").classList.remove("hidden");
-    } else {
-      scheduleReconnect();
-    }
+    } else scheduleReconnect();
   } finally {
     busy = false;
     document.querySelectorAll(".cmd").forEach(item => item.disabled = false);
@@ -110,9 +106,7 @@ $("refresh").addEventListener("click", async () => {
   catch { setStatus(false, "Phone offline"); scheduleReconnect(); }
 });
 $("clear").addEventListener("click", () => $("output").textContent = "");
-document.querySelectorAll(".cmd").forEach(button => {
-  button.addEventListener("click", () => run(button.dataset.cmd, button));
-});
+document.querySelectorAll(".cmd").forEach(button => button.addEventListener("click", () => run(button.dataset.cmd, button)));
 window.addEventListener("online", () => { if (token) scheduleReconnect(); });
 window.addEventListener("offline", () => setStatus(false, "Network offline"));
 window.addEventListener("error", event => {
@@ -123,5 +117,5 @@ window.addEventListener("unhandledrejection", event => {
 });
 if (token) {
   $("token").value = token;
-  connect().catch(() => scheduleReconnect());
+  connect();
 }
