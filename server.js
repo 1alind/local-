@@ -309,7 +309,7 @@ async function handleRequest(req, res) {
   res.writeHead(200, {
     "Content-Type": types[path.extname(file)] || "application/octet-stream",
     "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
-    "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https:; worker-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
   });
   if (req.method === "HEAD") return res.end();
   const stream = fs.createReadStream(file);
