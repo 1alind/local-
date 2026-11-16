@@ -15,6 +15,11 @@
     button{background:#252d40;color:var(--text);border:1px solid #39445b;border-radius:10px;padding:10px 14px;cursor:pointer}button:hover{border-color:var(--accent)}button:disabled{opacity:.48;cursor:not-allowed}.primary{background:var(--accent);color:#10131b;border-color:var(--accent);font-weight:700}
     input[type=file]{max-width:100%;color:var(--muted);font:13px system-ui}.file-pick{display:inline-flex;align-items:center;background:#252d40;border:1px solid #39445b;border-radius:10px;padding:10px 14px;cursor:pointer}
     #status{white-space:pre-wrap;background:#0b0e14;border:1px solid var(--line);border-radius:12px;padding:13px;margin:14px 0;line-height:1.5}
+    #loadProgress{margin:12px 0 16px}#progressTrack{height:12px;overflow:hidden;border-radius:99px;background:#090c12;border:1px solid #343d50}
+    #progressFill{height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .18s ease;position:relative;overflow:hidden}
+    #progressFill.busy:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 20%,#ffffff55 50%,transparent 80%);background-size:200% 100%;animation:progressShimmer 1.2s linear infinite}
+    #progressMeta{display:flex;justify-content:space-between;gap:12px;margin-top:7px;color:var(--muted);font-size:12px}
+    @keyframes progressShimmer{to{background-position:-200% 0}}
     #chat{height:min(52vh,560px);min-height:280px;overflow:auto;background:#080b11;border:1px solid #30394c;border-radius:12px;padding:15px;white-space:pre-wrap;overflow-wrap:anywhere;color:#d7e1f5;font:14px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace}
     form{display:flex;gap:10px;margin-top:12px}textarea{flex:1;min-width:0;resize:vertical;min-height:52px;max-height:150px;background:#0b0e14;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:13px;font:14px/1.5 system-ui;outline:none}textarea:focus{border-color:var(--accent)}
     .actions{display:flex;gap:8px;flex-wrap:wrap}.hint{font-size:13px}
@@ -35,6 +40,12 @@
       <button id="clear" type="button">Clear chat</button>
     </div>
     <div id="status" role="status">Checking WebGPU support…</div>
+    <div id="loadProgress" hidden>
+      <div id="progressTrack" role="progressbar" aria-label="Model loading progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div id="progressFill"></div>
+      </div>
+      <div id="progressMeta"><span id="progressPhase">Waiting</span><span id="progressPercent">0%</span></div>
+    </div>
     <div id="chat" aria-live="polite">Choose the Gemma 4 E2B WEB .litertlm model file from your device, then load it. The model is read locally by your browser. It is not uploaded and is not downloaded automatically.</div>
     <form id="form">
       <textarea id="prompt" rows="2" placeholder="Message Gemma…" disabled></textarea>
