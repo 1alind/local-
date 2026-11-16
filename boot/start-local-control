@@ -20,6 +20,6 @@ if command -v termux-wake-lock >/dev/null 2>&1; then
   termux-wake-lock >/dev/null 2>&1 || true
 fi
 
-nohup node "$APP_DIR/watchdog.js" >> "$APP_DIR/logs/supervisor.log" 2>&1 </dev/null &
+nohup sh "$APP_DIR/start.sh" >> "$APP_DIR/logs/supervisor.log" 2>&1 </dev/null &
 echo "$!" > "$APP_DIR/.watchdog.pid"
 echo "Local LAN Control supervisor started."
