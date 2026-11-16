@@ -314,6 +314,62 @@ async function handleRequest(req, res) {
       upstream.end(body);
       return;
     }
+    if (req.method === "GET" && url.pathname === "/api/gemma/approvals/pending") {
+      const upstream = http.get({ host: "127.0.0.1", port: 23456, path: "/api/approvals/pending", timeout: 5000 }, upstreamRes => {
+        res.writeHead(upstreamRes.statusCode || 502, {
+          "Content-Type": upstreamRes.headers["content-type"] || "application/json",
+          "Cache-Control": "no-store"
+        });
+        upstreamRes.pipe(res);
+      });
+      upstream.on("timeout", () => upstream.destroy(new Error("Gemma approval check timed out")));
+      upstream.on("error", error => {
+        if (!res.headersSent) reply(res, 502, { error: "Gemma API is unreachable: " + error.message });
+        else res.end();
+      });
+      return;
+    }
+    if (req.method === "POST" && ["/api/gemma/chat/stop", "/api/gemma/chat/clear"].includes(url.pathname)) {
+      const targetPath = url.pathname.endsWith("/stop") ? "/api/chat/stop" : "/api/chat/clear";
+      const upstream = http.request({
+        host: "127.0.0.1", port: 23456, path: targetPath, method: "POST",
+        headers: { "Content-Length": "0" }
+      }, upstreamRes => {
+        res.writeHead(upstreamRes.statusCode || 502, {
+          "Content-Type": upstreamRes.headers["content-type"] || "application/json",
+          "Cache-Control": "no-store"
+        });
+        upstreamRes.pipe(res);
+      });
+      upstream.on("error", error => {
+        if (!res.headersSent) reply(res, 502, { error: "Gemma API is unreachable: " + error.message });
+        else res.end();
+      });
+      upstream.end();
+      return;
+    }
+    if (req.method === "POST" && url.pathname === "/api/gemma/approvals/decision") {
+      let data;
+      try { data = await readBody(req); }
+      catch (error) { return reply(res, 400, { error: error.message }); }
+      const body = Buffer.from(JSON.stringify(data), "utf8");
+      const upstream = http.request({
+        host: "127.0.0.1", port: 23456, path: "/api/approvals/decision", method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": body.length }
+      }, upstreamRes => {
+        res.writeHead(upstreamRes.statusCode || 502, {
+          "Content-Type": upstreamRes.headers["content-type"] || "application/json",
+          "Cache-Control": "no-store"
+        });
+        upstreamRes.pipe(res);
+      });
+      upstream.on("error", error => {
+        if (!res.headersSent) reply(res, 502, { error: "Gemma API is unreachable: " + error.message });
+        else res.end();
+      });
+      upstream.end(body);
+      return;
+    }
     if (req.method === "GET" && url.pathname === "/api/status") {
       return reply(res, 200, {
         online: true, device: os.hostname(),
