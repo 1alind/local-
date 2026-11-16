@@ -1,6 +1,0 @@
-.watchdog.pid
-logs/
-node_modules/
-.local-token
-certs/
-public/lan-ca.crt
