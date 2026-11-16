@@ -288,9 +288,17 @@ async function handleRequest(req, res) {
       return;
     }
     if (req.method === "POST" && url.pathname === "/api/gemma/chat/stream") {
+      let data;
+      try { data = await readBody(req); }
+      catch (error) { return reply(res, 400, { error: error.message }); }
+      const body = Buffer.from(JSON.stringify(data), "utf8");
       const upstream = http.request({
         host: "127.0.0.1", port: 23456, path: "/api/chat/stream", method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" }
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+          "Content-Length": body.length
+        }
       }, upstreamRes => {
         res.writeHead(upstreamRes.statusCode || 502, {
           "Content-Type": upstreamRes.headers["content-type"] || "text/event-stream; charset=utf-8",
@@ -302,9 +310,8 @@ async function handleRequest(req, res) {
         if (!res.headersSent) reply(res, 502, { error: "Gemma API is unreachable: " + error.message });
         else res.end();
       });
-      req.on("aborted", () => upstream.destroy());
       res.on("close", () => { if (!res.writableEnded) upstream.destroy(); });
-      req.pipe(upstream);
+      upstream.end(body);
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/status") {
