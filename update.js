@@ -8,8 +8,20 @@ const LOG_DIR = path.join(ROOT, "logs");
 const LOG_FILE = path.join(LOG_DIR, "update.log");
 fs.mkdirSync(LOG_DIR, { recursive: true });
 
+const STATUS_FILE = path.join(LOG_DIR, "update-status.json");
+
+function setStatus(status, message) {
+  try {
+    fs.writeFileSync(STATUS_FILE, JSON.stringify({
+      status, message, updatedAt: new Date().toISOString()
+    }, null, 2));
+  } catch (error) {
+    process.stderr.write("[update] Could not save status: " + error.message + "\\n");
+  }
+}
+
 function log(...parts) {
-  const line = new Date().toISOString() + " " + parts.join(" ") + "\n";
+  const line = new Date().toISOString() + " " + parts.join(" ") + "\\n";
   process.stdout.write(line);
   try { fs.appendFileSync(LOG_FILE, line); } catch {}
 }
@@ -40,6 +52,7 @@ function git(args, timeout = 120000) {
 }
 
 async function main() {
+  setStatus("checking", "Checking the GitHub repository…");
   log("[update] Starting update check.");
   const inside = await git(["rev-parse", "--is-inside-work-tree"]);
   if (inside !== "true") throw new Error("This folder is not a Git repository.");
@@ -56,12 +69,14 @@ async function main() {
   const count = await git(["rev-list", "--count", "HEAD.." + upstream]);
   if (Number(count) === 0) {
     log("[update] Already up to date. No restart needed.");
+    setStatus("up_to_date", "Already up to date. No new version is available.");
     return;
   }
 
   log("[update] Found", count, "new commit(s). Installing with fast-forward only.");
   await git(["pull", "--ff-only", "origin", upstream.split("/").slice(1).join("/")], 180000);
   log("[update] Files updated. Asking the server to restart under the watchdog.");
+  setStatus("updated", "Update installed successfully. Restarting the server…");
 
   // The updater is a child of server.js. The watchdog will relaunch the server
   // after this signal, loading the newly downloaded code.
@@ -71,5 +86,6 @@ async function main() {
 
 main().catch(error => {
   log("[update] FAILED:", error.message);
+  setStatus("failed", error.message);
   process.exitCode = 1;
 });
