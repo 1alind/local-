@@ -5,8 +5,8 @@
   "description": "LAN-only command dashboard for a Termux Android device",
   "type": "module",
   "scripts": {
-    "start": "node watchdog.js",
-    "start:server": "node server.js"
+    "start": "sh ./start.sh",
+    "start:server": "sh ./start.sh --server-only"
   },
   "engines": {
     "node": ">=20"
