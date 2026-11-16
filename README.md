@@ -55,15 +55,6 @@ The CA private key stays in the Termux project's ignored `certs/` directory. The
 
 The shell runs as the Termux app user, with the same permissions and access as commands typed directly into Termux. This implementation connects to an interactive Bash process through pipes, not a real pseudo-terminal (PTY). Most command-line tools and text prompts work, but full-screen terminal programs or tools that require a real TTY (for example vim, nano, or interactive top) may not work correctly. Terminal escape sequences are displayed as text rather than rendered by a full terminal emulator.
 
-## Update from the dashboard
-
-Press **Check for updates**. The updater fetches the configured GitHub upstream and applies changes only with a fast-forward update. After a successful update, it signals only the running `server.js` process. The watchdog stays alive and starts a fresh `server.js` using the updated files. The shell launcher and watchdog are not restarted.
-
-- Local changes are automatically backed up before updating and restored afterward. If restoration conflicts, the backup is retained rather than discarded.
-- It does not run arbitrary downloaded shell scripts or install npm packages.
-- Update details are appended to `logs/update.log`, and the dashboard displays checking, success, up-to-date, and failure states.
-- A legacy `.local-token` file is ignored so it cannot block updates.
-
 ## Reliability
 
 - `sh start.sh` (or `npm start`) starts the watchdog and the web server on port 8787.
