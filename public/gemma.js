@@ -44,7 +44,7 @@ fileInput.addEventListener("change", () => {
 
 async function checkWebGPU() {
   if (!window.isSecureContext) {
-    webGpuMessage = "This page is not in a secure context. WebGPU is blocked on a LAN HTTP address. Open the site through HTTPS, or use http://127.0.0.1:8787 on the same device.";
+    webGpuMessage = "This page is not secure. For another device, download /lan-ca.crt from the HTTP dashboard, trust that certificate on this device, then open https://PHONE-IP:8788/gemma.html. WebGPU cannot run from the LAN HTTP address.";
     setStatus(webGpuMessage);
     return false;
   }
