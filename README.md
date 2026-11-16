@@ -24,7 +24,13 @@ cd local-
 npm start
 ```
 
-Before launching the HTTP server, the launcher uses `pkill` to stop this project's old watchdog, `ss` to check listeners on TCP port 8787, and `fuser` to terminate processes holding that port. It sends SIGTERM first, then SIGKILL if the listener remains. If the port is still occupied, startup aborts and prints the remaining listener details. These commands are already available in the user's Termux setup; the installer does not install them.
+Start the project with the shell launcher:
+
+```sh
+sh start.sh
+```
+
+The launcher starts the Node.js watchdog, which runs and monitors only this project's `server.js`. If port 8787 is already occupied, startup stops with an error. It does not kill other Node.js processes, Termux processes, or unrelated apps.
 
 Open the LAN URL printed in Termux from another device on the same Wi-Fi network. The web page starts a shell session automatically.
 
@@ -41,17 +47,18 @@ The shell runs as the Termux app user, with the same permissions and access as c
 
 ## Update from the dashboard
 
-Press **Check for updates**. The updater fetches the configured GitHub upstream and applies changes only with a fast-forward update. The watchdog restarts the server to load the new code.
+Press **Check for updates**. The updater fetches the configured GitHub upstream and applies changes only with a fast-forward update. After a successful update, it signals only the running `server.js` process. The watchdog stays alive and starts a fresh `server.js` using the updated files. The shell launcher and watchdog are not restarted.
 
-- The updater refuses to overwrite uncommitted local changes.
+- Local changes are automatically backed up before updating and restored afterward. If restoration conflicts, the backup is retained rather than discarded.
 - It does not run arbitrary downloaded shell scripts or install npm packages.
 - Update details are appended to `logs/update.log`, and the dashboard displays checking, success, up-to-date, and failure states.
 - A legacy `.local-token` file is ignored so it cannot block updates.
 
 ## Reliability
 
-- `npm start` identifies and terminates existing listeners on TCP port 8787 before starting the supervisor that restarts the web server after a crash.
-- `npm run start:server` uses the same port-cleanup launcher but starts the server without the supervisor.
+- `sh start.sh` (or `npm start`) starts the watchdog and the web server on port 8787.
+- `npm run start:server` starts only the web server without the watchdog.
+- If port 8787 is occupied, the launcher refuses to start and leaves every other process untouched.
 - Termux:Boot uses the same launcher, so startup after reboot follows the same port check.
 - The browser reconnects to the live output stream if the network briefly drops.
 - Terminal sessions close after 30 minutes without input.
