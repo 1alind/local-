@@ -251,6 +251,13 @@ async function handleRequest(req, res) {
     if (req.method === "POST" && url.pathname === "/api/update") {
       if (updateInProgress) return reply(res, 409, { error: "An update is already running." });
       updateInProgress = true;
+      try {
+        fs.mkdirSync("logs", { recursive: true });
+        fs.writeFileSync("logs/update-status.json", JSON.stringify({
+          status: "checking", message: "Starting update check…",
+          updatedAt: new Date().toISOString()
+        }, null, 2));
+      } catch {}
       let updater;
       try {
         updater = spawn(process.execPath, [path.resolve("update.js")], {
