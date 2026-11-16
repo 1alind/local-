@@ -36,7 +36,7 @@ async function clearPort() {
   console.log(`[start] Checking TCP port ${PORT}...`);
 
   // Stop this project's supervisor first, otherwise it can respawn its server.
-  const watchdog = run("pkill", ["-TERM", "-f", "watchdog[.]js"]);
+  const watchdog = run("pkill", ["-TERM", "-f", path.join(ROOT, "watchdog[.]js")]);
   if (watchdog.status === 0) console.log("[start] Stopped existing watchdog process.");
 
   let active = listeners();
