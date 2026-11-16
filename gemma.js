@@ -6,6 +6,11 @@ const fileInput = document.querySelector("#modelFile");
 const form = document.querySelector("#form");
 const promptEl = document.querySelector("#prompt");
 const sendBtn = document.querySelector("#send");
+const progressWrap = document.querySelector("#loadProgress");
+const progressTrack = document.querySelector("#progressTrack");
+const progressFill = document.querySelector("#progressFill");
+const progressPhase = document.querySelector("#progressPhase");
+const progressPercent = document.querySelector("#progressPercent");
 
 let engine = null;
 let conversation = null;
@@ -18,6 +23,21 @@ function setStatus(message) { statusEl.textContent = message; }
 function append(message) {
   chatEl.textContent += message;
   chatEl.scrollTop = chatEl.scrollHeight;
+}
+function setProgress(percent, phase, busy = true) {
+  const value = Math.max(0, Math.min(100, Math.round(percent)));
+  progressWrap.hidden = false;
+  progressFill.style.width = value + "%";
+  progressFill.classList.toggle("busy", busy);
+  progressTrack.setAttribute("aria-valuenow", String(value));
+  progressPhase.textContent = phase;
+  progressPercent.textContent = value + "%";
+}
+function resetProgress() {
+  progressWrap.hidden = true;
+  progressFill.style.width = "0%";
+  progressFill.classList.remove("busy");
+  progressTrack.setAttribute("aria-valuenow", "0");
 }
 function updateLoadState() {
   loadBtn.disabled = !fileInput.files?.[0] || !webGpuReady || loading || !!engine;
@@ -55,6 +75,7 @@ async function checkWebGPU() {
 }
 
 fileInput.addEventListener("change", () => {
+  resetProgress();
   const file = fileInput.files?.[0];
   if (file && webGpuReady) {
     setStatus("Selected: " + file.name + " (" + (file.size / 1024 ** 3).toFixed(2) +
@@ -70,11 +91,25 @@ loadBtn.addEventListener("click", async () => {
   if (!file || loading || engine) return;
   loading = true;
   updateLoadState();
-  setStatus("Loading " + file.name + " from your device. This may take a while. The file is not uploaded.");
+  setProgress(0, "Starting runtime…");
+  setStatus("Preparing to load " + file.name + " locally. The model is not uploaded.");
   try {
     const { Engine } = await import("https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm");
-    engine = await Engine.create({ model: file });
+    setProgress(0, "Reading model file…");
+    let bytesRead = 0;
+    const modelStream = file.stream().pipeThrough(new TransformStream({
+      transform(chunk, controller) {
+        bytesRead += chunk.byteLength;
+        const percent = file.size ? Math.min(90, (bytesRead / file.size) * 90) : 90;
+        setProgress(percent, "Reading model file (" + (bytesRead / 1024 ** 3).toFixed(2) +
+          " / " + (file.size / 1024 ** 3).toFixed(2) + " GB)…");
+        controller.enqueue(chunk);
+      }
+    }));
+    engine = await Engine.create({ model: modelStream });
+    setProgress(94, "Initializing model on the GPU…");
     conversation = await engine.createConversation();
+    setProgress(100, "Model ready", false);
     setStatus("Model loaded. Prompts are processed locally in this browser.");
     promptEl.disabled = false;
     sendBtn.disabled = false;
