@@ -61,9 +61,9 @@ async function restoreLocalChanges(stashRef) {
   } catch (error) {
     setStatus(
       "restore_needed",
-      "The update was installed, but some local changes could not be merged automatically. Your backup is محفوظ in Git stash; no local changes were deleted. Resolve the conflict and run: git stash list"
+      "The update was installed, but some local changes could not be merged automatically. Your backup is saved in Git stash; no local changes were deleted. Resolve the conflict and run: git stash list"
     );
-    throw new Error("Update installed, but restoring local changes needs conflict resolution. Your backup is still محفوظ in Git stash. " + error.message);
+    throw new Error("Update installed, but restoring local changes needs conflict resolution. Your backup is still saved in Git stash. " + error.message);
   }
 }
 
