@@ -62,7 +62,6 @@ async function stopPreviousProjectServer() {
   if (!processes.length) return;
 
   const watchdogs = processes.filter(p => p.args.includes(WATCHDOG));
-  const servers = processes.filter(p => p.args.includes(SERVER));
   console.log("[start] Existing instance of this project found. Restarting only its server process tree.");
 
   // Stop the watchdog first. It will gracefully stop its own server child.
