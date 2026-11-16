@@ -23,7 +23,7 @@ cd local-
 npm start
 ```
 
-The watchdog starts the web server and restarts it if it exits. The first start creates `.local-token` and prints the private dashboard token. Keep it secret. Open the LAN URL printed in Termux from another device on the same Wi-Fi, then paste the token.
+The watchdog starts the web server and restarts it if it exits. Open the LAN URL printed in Termux from another device on the same private Wi-Fi network. No login or token is required.
 
 ## Update from the dashboard
 
@@ -96,11 +96,10 @@ No Termux app can guarantee 100% uptime. Android can still stop it if you force-
 ## Security
 
 - The server listens on the phone's LAN interfaces on port 8787.
-- API access requires a random token stored in `.local-token`.
+- There is no login or token. Any device on the same private LAN can use the dashboard and its limited diagnostic/update actions.
 - API requests from non-private IP ranges are rejected.
 - The first version exposes only a limited diagnostic command allowlist, not an unrestricted shell.
-- Do not configure router port forwarding for port 8787. Avoid untrusted/public Wi-Fi.
-- If the token is exposed, stop the service, delete `.local-token`, and restart to generate a new one.
+- Do not configure router port forwarding for port 8787. Avoid untrusted/public Wi-Fi because other devices on the same network can access the dashboard.
 
 ## Available commands
 
