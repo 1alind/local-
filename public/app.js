@@ -12,13 +12,8 @@ function scheduleReconnect() {
   if (!token || retryTimer) return;
   retryTimer = setTimeout(async () => {
     retryTimer = null;
-    try {
-      await checkStatus();
-      retryDelay = 2000;
-    } catch {
-      retryDelay = Math.min(retryDelay * 1.7, 30000);
-      scheduleReconnect();
-    }
+    try { await checkStatus(); retryDelay = 2000; }
+    catch { retryDelay = Math.min(retryDelay * 1.7, 30000); scheduleReconnect(); }
   }, retryDelay);
 }
 async function api(path, options = {}) {
@@ -28,11 +23,7 @@ async function api(path, options = {}) {
     const response = await fetch(path, {
       ...options,
       signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + token,
-        ...(options.headers || {})
-      }
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token, ...(options.headers || {}) }
     });
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) throw new Error("Wrong token. Paste the token printed in Termux.");
@@ -61,9 +52,7 @@ async function connect() {
     $("output").textContent = "Connected. Select a diagnostic command.";
   } catch (error) {
     setStatus(false, "Connection failed");
-    $("output").textContent = error.name === "AbortError"
-      ? "Connection timed out. Check Termux and the Wi-Fi connection."
-      : error.message;
+    $("output").textContent = error.name === "AbortError" ? "Connection timed out. Check Termux and the Wi-Fi connection." : error.message;
     $("login").classList.remove("hidden");
     if (!/wrong token/i.test(error.message)) scheduleReconnect();
   }
@@ -71,8 +60,7 @@ async function connect() {
 async function run(command, button) {
   if (busy) return;
   busy = true;
-  const label = button.querySelector("strong").textContent;
-  $("output").textContent = "Running " + label + "...";
+  $("output").textContent = "Running " + button.querySelector("strong").textContent + "...";
   document.querySelectorAll(".cmd").forEach(item => item.disabled = true);
   try {
     const result = await api("/api/run", { method: "POST", body: JSON.stringify({ command }) });
@@ -84,9 +72,7 @@ async function run(command, button) {
     $("output").textContent = parts.join("\n\n") + "\n\nExit code: " + result.code;
     setStatus(true, "Phone connected");
   } catch (error) {
-    $("output").textContent = error.name === "AbortError"
-      ? "The request timed out. The phone may be busy or disconnected."
-      : error.message;
+    $("output").textContent = error.name === "AbortError" ? "The request timed out. The phone may be busy or disconnected." : error.message;
     setStatus(false, "Reconnecting…");
     if (/wrong token/i.test(error.message)) {
       sessionStorage.removeItem("lan-control-token");
@@ -109,13 +95,14 @@ $("clear").addEventListener("click", () => $("output").textContent = "");
 document.querySelectorAll(".cmd").forEach(button => button.addEventListener("click", () => run(button.dataset.cmd, button)));
 window.addEventListener("online", () => { if (token) scheduleReconnect(); });
 window.addEventListener("offline", () => setStatus(false, "Network offline"));
-window.addEventListener("error", event => {
-  $("output").textContent = "Dashboard error: " + (event.message || "unknown error") + ". Refresh the page if needed.";
+window.addEventListener("error", event => { $("output").textContent = "Dashboard error: " + (event.message || "unknown error") + ". Refresh the page if needed."; });
+window.addEventListener("unhandledrejection", event => { $("output").textContent = "Dashboard request failed: " + (event.reason?.message || "unknown error"); });
+setInterval(async () => {
+  if (!token || busy || document.hidden) return;
+  try { await checkStatus(); }
+  catch { setStatus(false, "Phone offline"); scheduleReconnect(); }
+}, 15000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && token) scheduleReconnect();
 });
-window.addEventListener("unhandledrejection", event => {
-  $("output").textContent = "Dashboard request failed: " + (event.reason?.message || "unknown error");
-});
-if (token) {
-  $("token").value = token;
-  connect();
-}
+if (token) { $("token").value = token; connect(); }
