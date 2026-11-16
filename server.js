@@ -22,7 +22,6 @@ const MAX_SESSIONS = 4;
 const MAX_EVENT_BYTES = 256 * 1024;
 const SESSION_IDLE_MS = 30 * 60 * 1000;
 let shuttingDown = false;
-let updateInProgress = false;
 const sessions = new Map();
 
  
@@ -298,52 +297,6 @@ async function handleRequest(req, res) {
       return closeTerminal(res, data);
     }
 
-    if (req.method === "GET" && url.pathname === "/api/update/status") {
-      try {
-        const statusFile = path.resolve("logs/update-status.json");
-        const status = JSON.parse(await fs.promises.readFile(statusFile, "utf8"));
-        return reply(res, 200, status);
-      } catch {
-        return reply(res, 200, { status: "idle", message: "No update has been run yet." });
-      }
-    }
-
-    if (req.method === "POST" && url.pathname === "/api/update") {
-      if (updateInProgress) return reply(res, 409, { error: "An update is already running." });
-      updateInProgress = true;
-      try {
-        fs.mkdirSync("logs", { recursive: true });
-        fs.writeFileSync("logs/update-status.json", JSON.stringify({
-          status: "checking", message: "Starting update check…",
-          updatedAt: new Date().toISOString()
-        }, null, 2));
-      } catch {}
-      let updater;
-      try {
-        updater = spawn(process.execPath, [path.resolve("update.js")], {
-          cwd: path.resolve("."), env: process.env, stdio: ["ignore", "ignore", "ignore"]
-        });
-      } catch (error) {
-        updateInProgress = false;
-        return reply(res, 500, { error: "Could not start updater: " + error.message });
-      }
-      updater.once("error", error => {
-        updateInProgress = false;
-        console.error("[update] Could not start updater:", error.message);
-        try {
-          fs.mkdirSync("logs", { recursive: true });
-          fs.writeFileSync("logs/update-status.json", JSON.stringify({
-            status: "failed", message: "Could not start updater: " + error.message,
-            updatedAt: new Date().toISOString()
-          }, null, 2));
-        } catch {}
-      });
-      updater.once("exit", code => {
-        updateInProgress = false;
-        if (code !== 0) console.error("[update] Updater exited with code", code);
-      });
-      return reply(res, 202, { ok: true, message: "Update check started. The terminal will reconnect if the server restarts." });
-    }
     return reply(res, 404, { error: "Not found" });
   }
 
