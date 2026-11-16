@@ -132,16 +132,42 @@ $("interrupt").addEventListener("click", async () => {
   catch (error) { appendOutput("\n[Interrupt failed: " + error.message + "]\n"); }
 });
 $("clear").addEventListener("click", () => { $("output").textContent = ""; });
+async function watchUpdate() {
+  const started = Date.now();
+  $("update").disabled = true;
+  $("updateHint").textContent = "Checking GitHub…";
+  while (Date.now() - started < 180000) {
+    try {
+      const status = await api("/api/update/status");
+      $("updateHint").textContent = status.message || "Update status: " + status.status;
+      if (status.status === "updated") {
+        $("updateHint").textContent = "Update installed. The server is restarting…";
+        $("update").disabled = false;
+        return;
+      }
+      if (status.status === "up_to_date" || status.status === "failed") {
+        $("update").disabled = false;
+        return;
+      }
+    } catch {
+      $("updateHint").textContent = "Server restarting or reconnecting…";
+    }
+    await new Promise(resolve => setTimeout(resolve, 1500));
+  }
+  $("updateHint").textContent = "Still waiting. Check Termux: tail -n 60 ~/local-/logs/update.log";
+  $("update").disabled = false;
+}
 $("update").addEventListener("click", async () => {
   if (!confirm("Check GitHub for an update and install it if available? The server may restart.")) return;
   $("update").disabled = true;
-  $("updateHint").textContent = "Checking GitHub and preparing the update…";
+  $("updateHint").textContent = "Starting update check…";
   try {
-    const result = await api("/api/update", { method: "POST", body: "{}" });
-    $("updateHint").textContent = result.message || "Update process started.";
+    await api("/api/update", { method: "POST", body: "{}" });
+    await watchUpdate();
   } catch (error) {
     $("updateHint").textContent = "Could not start update: " + error.message;
-  } finally { $("update").disabled = false; }
+    $("update").disabled = false;
+  }
 });
 window.addEventListener("online", scheduleReconnect);
 window.addEventListener("offline", () => setStatus(false, "Network offline"));
