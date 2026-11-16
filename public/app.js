@@ -1,5 +1,4 @@
 const $ = id => document.getElementById(id);
-let token = sessionStorage.getItem("lan-control-token") || "";
 let retryTimer = null;
 let retryDelay = 2000;
 let busy = false;
@@ -9,7 +8,7 @@ function setStatus(online, label) {
   $("status").innerHTML = '<span class="dot"></span>' + label;
 }
 function scheduleReconnect() {
-  if (!token || retryTimer) return;
+  if (retryTimer) return;
   retryTimer = setTimeout(async () => {
     retryTimer = null;
     try { await checkStatus(); retryDelay = 2000; }
@@ -23,10 +22,9 @@ async function api(path, options = {}) {
     const response = await fetch(path, {
       ...options,
       signal: controller.signal,
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token, ...(options.headers || {}) }
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) }
     });
     const data = await response.json().catch(() => ({}));
-    if (response.status === 401) throw new Error("Wrong token. Paste the token printed in Termux.");
     if (!response.ok) throw new Error(data.error || "Request failed: " + response.status);
     return data;
   } finally { clearTimeout(timeout); }
@@ -36,27 +34,10 @@ async function checkStatus() {
   $("device").textContent = "Device: " + (info.device || "Android");
   $("platform").textContent = info.platform || "";
   setStatus(true, "Phone connected");
-  $("login").classList.add("hidden");
   $("dashboard").classList.remove("hidden");
   return info;
 }
-async function connect() {
-  token = $("token").value.trim();
-  if (!token) return;
-  try {
-    await checkStatus();
-    sessionStorage.setItem("lan-control-token", token);
-    retryDelay = 2000;
-    if (retryTimer) clearTimeout(retryTimer);
-    retryTimer = null;
-    $("output").textContent = "Connected. Select a diagnostic command.";
-  } catch (error) {
-    setStatus(false, "Connection failed");
-    $("output").textContent = error.name === "AbortError" ? "Connection timed out. Check Termux and the Wi-Fi connection." : error.message;
-    $("login").classList.remove("hidden");
-    if (!/wrong token/i.test(error.message)) scheduleReconnect();
-  }
-}
+
 async function run(command, button) {
   if (busy) return;
   busy = true;
@@ -74,19 +55,12 @@ async function run(command, button) {
   } catch (error) {
     $("output").textContent = error.name === "AbortError" ? "The request timed out. The phone may be busy or disconnected." : error.message;
     setStatus(false, "Reconnecting…");
-    if (/wrong token/i.test(error.message)) {
-      sessionStorage.removeItem("lan-control-token");
-      token = "";
-      $("dashboard").classList.add("hidden");
-      $("login").classList.remove("hidden");
-    } else scheduleReconnect();
+    scheduleReconnect();
   } finally {
     busy = false;
     document.querySelectorAll(".cmd").forEach(item => item.disabled = false);
   }
 }
-$("connect").addEventListener("click", connect);
-$("token").addEventListener("keydown", event => { if (event.key === "Enter") connect(); });
 $("refresh").addEventListener("click", async () => {
   try { await checkStatus(); $("output").textContent = "Connection is healthy."; }
   catch { setStatus(false, "Phone offline"); scheduleReconnect(); }
@@ -112,16 +86,16 @@ $("update").addEventListener("click", async () => {
 });
 $("clear").addEventListener("click", () => $("output").textContent = "");
 document.querySelectorAll(".cmd").forEach(button => button.addEventListener("click", () => run(button.dataset.cmd, button)));
-window.addEventListener("online", () => { if (token) scheduleReconnect(); });
+window.addEventListener("online", () => { scheduleReconnect(); });
 window.addEventListener("offline", () => setStatus(false, "Network offline"));
 window.addEventListener("error", event => { $("output").textContent = "Dashboard error: " + (event.message || "unknown error") + ". Refresh the page if needed."; });
 window.addEventListener("unhandledrejection", event => { $("output").textContent = "Dashboard request failed: " + (event.reason?.message || "unknown error"); });
 setInterval(async () => {
-  if (!token || busy || document.hidden) return;
+  if (busy || document.hidden) return;
   try { await checkStatus(); }
   catch { setStatus(false, "Phone offline"); scheduleReconnect(); }
 }, 15000);
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && token) scheduleReconnect();
+  if (!document.hidden) scheduleReconnect();
 });
-if (token) { $("token").value = token; connect(); }
+checkStatus().catch(() => { setStatus(false, "Phone offline"); scheduleReconnect(); });
