@@ -24,7 +24,7 @@ cd local-
 npm start
 ```
 
-Before launching the HTTP server, the launcher checks Linux's `/proc/net/tcp` and `/proc/net/tcp6` tables, maps listening socket inodes to process IDs through `/proc/*/fd`, and terminates the process(es) holding TCP port 8787. It also stops a parent project watchdog first so it cannot respawn the old server. This uses Node.js and the Android/Linux proc filesystem only; no extra Termux packages or utilities are required. If the port remains occupied after termination, startup aborts and prints the remaining PID(s).
+Before launching the HTTP server, the launcher uses `pkill` to stop this project's old watchdog, `ss` to check listeners on TCP port 8787, and `fuser` to terminate processes holding that port. It sends SIGTERM first, then SIGKILL if the listener remains. If the port is still occupied, startup aborts and prints the remaining listener details. These commands are already available in the user's Termux setup; the installer does not install them.
 
 Open the LAN URL printed in Termux from another device on the same Wi-Fi network. The web page starts a shell session automatically.
 
