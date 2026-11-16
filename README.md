@@ -18,13 +18,13 @@ In Termux:
 
 ```sh
 pkg update
-pkg install nodejs git iproute2
+pkg install nodejs git iproute2 lsof psmisc procps
 git clone https://github.com/1alind/local-.git
 cd local-
 npm start
 ```
 
-Before starting, the launcher checks TCP port 8787 and stops any process already listening on that exact port. If the listener belongs to this project's watchdog, it stops the watchdog too so it cannot immediately restart the old server. It uses `ss` from `iproute2`; install that package as shown above. If Termux cannot identify the listener PID, the launcher refuses to guess or kill an unrelated process.
+The process utilities are installed alongside the app: `ss` (iproute2), `lsof`, `fuser` (psmisc), and `pkill` (procps). The launcher currently uses `ss` to identify the process listening on TCP port 8787. Before starting, it stops any process already listening on that exact port. If the listener belongs to this project's watchdog, it stops the watchdog too so it cannot immediately restart the old server. If Termux cannot identify the listener PID, the launcher refuses to guess or kill an unrelated process.
 
 Open the LAN URL printed in Termux from another device on the same Wi-Fi network. The web page starts a shell session automatically.
 
