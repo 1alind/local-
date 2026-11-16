@@ -12,6 +12,7 @@ const TOKEN_FILE = path.resolve(".local-token");
 const MAX_BODY = 2048;
 const MAX_OUTPUT = 60000;
 let shuttingDown = false;
+let updateInProgress = false;
 
 function loadToken() {
   try {
@@ -166,6 +167,31 @@ async function handleRequest(req, res) {
         commands: Object.keys(COMMANDS),
         uptime: Math.floor(process.uptime())
       });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/update") {
+      if (updateInProgress) return reply(res, 409, { error: "An update is already running." });
+      updateInProgress = true;
+      let updater;
+      try {
+        updater = spawn(process.execPath, [path.resolve("update.js")], {
+          cwd: path.resolve("."),
+          env: process.env,
+          stdio: ["ignore", "ignore", "ignore"]
+        });
+      } catch (error) {
+        updateInProgress = false;
+        return reply(res, 500, { error: "Could not start updater: " + error.message });
+      }
+      updater.once("error", error => {
+        updateInProgress = false;
+        console.error("[update] Could not start updater:", error.message);
+      });
+      updater.once("exit", code => {
+        updateInProgress = false;
+        if (code !== 0) console.error("[update] Updater exited with code", code);
+      });
+      return reply(res, 202, { ok: true, message: "Update check started. The dashboard will reconnect if the server restarts." });
     }
 
     if (req.method === "POST" && url.pathname === "/api/run") {
