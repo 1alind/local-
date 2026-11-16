@@ -193,7 +193,8 @@ function createTerminalSession(res) {
 
 function streamTerminal(req, res, url) {
   const session = sessions.get(url.searchParams.get("id") || "");
-  if (!session) return reply(res, 404, { error: "Terminal session not found. Create a new session." });
+  if (!session || session.closed || session.child.exitCode !== null) return reply(res, 404, { error: "Terminal session not found. Create a new session." });
+  touchSession(session);
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
     "Cache-Control": "no-cache, no-transform",
@@ -278,6 +279,14 @@ async function handleRequest(req, res) {
         terminalSessions: sessions.size,
         uptime: Math.floor(process.uptime())
       });
+    }
+    if (req.method === "GET" && url.pathname === "/api/terminal/session") {
+      const session = sessions.get(url.searchParams.get("id") || "");
+      if (!session || session.closed || session.child.exitCode !== null) {
+        return reply(res, 404, { error: "Terminal session is no longer active." });
+      }
+      touchSession(session);
+      return reply(res, 200, { ok: true, active: true, sessionId: session.id });
     }
     if (req.method === "POST" && url.pathname === "/api/terminal/session") return createTerminalSession(res);
     if (req.method === "GET" && url.pathname === "/api/terminal/events") return streamTerminal(req, res, url);
