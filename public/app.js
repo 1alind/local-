@@ -72,6 +72,7 @@ function connectEvents() {
     else if (message.type === "exit") {
       appendOutput("\n[Shell exited. Exit code: " + message.code + "]\n");
       sessionId = null;
+      sessionStorage.removeItem("localLanTerminalSession");
       events.close();
       events = null;
       $("terminalHint").textContent = "Shell closed. Start a new terminal session.";
@@ -88,10 +89,25 @@ async function startTerminal() {
   if (creatingSession || sessionId) return;
   creatingSession = true;
   $("start").disabled = true;
-  $("terminalHint").textContent = "Starting Termux shell…";
+  $("terminalHint").textContent = "Reconnecting to Termux shell…";
   try {
+    const savedId = sessionStorage.getItem("localLanTerminalSession");
+    if (savedId) {
+      try {
+        const existing = await api("/api/terminal/session?id=" + encodeURIComponent(savedId));
+        if (existing.active) {
+          sessionId = savedId;
+          appendOutput("\\n[Reconnected to existing terminal session]\\n");
+          connectEvents();
+          return;
+        }
+      } catch {}
+      sessionStorage.removeItem("localLanTerminalSession");
+    }
+    $("terminalHint").textContent = "Starting Termux shell…";
     const result = await api("/api/terminal/session", { method: "POST", body: "{}" });
     sessionId = result.sessionId;
+    sessionStorage.setItem("localLanTerminalSession", sessionId);
     $("output").textContent = "";
     appendOutput("Connected to " + result.shell + "\n");
     connectEvents();
