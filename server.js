@@ -1,13 +1,21 @@
 import http from "node:http";
+import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { execFileSync } from "node:child_process";
 
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
+const HTTPS_PORT = Number(process.env.HTTPS_PORT || 8788);
 const ROOT = path.resolve("public");
+const CERT_DIR = path.resolve("certs");
+const CA_CERT = path.join(CERT_DIR, "lan-ca.crt");
+const CA_KEY = path.join(CERT_DIR, "lan-ca.key");
+const TLS_KEY = path.join(CERT_DIR, "server.key");
+const TLS_CERT = path.join(CERT_DIR, "server.crt");
 const MAX_BODY = 65536;
 const MAX_INPUT = 32768;
 const MAX_SESSIONS = 4;
@@ -16,6 +24,49 @@ const SESSION_IDLE_MS = 30 * 60 * 1000;
 let shuttingDown = false;
 let updateInProgress = false;
 const sessions = new Map();
+
+ 
+function ensureLanTls() {
+  try {
+    fs.mkdirSync(CERT_DIR, { recursive: true });
+    if (!fs.existsSync(CA_KEY) || !fs.existsSync(CA_CERT)) {
+      console.log("[https] Creating a private LAN certificate authority...");
+      execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes",
+        "-keyout", CA_KEY, "-out", CA_CERT, "-days", "3650",
+        "-subj", "/CN=Termux Local LAN CA"], { stdio: "ignore" });
+      fs.chmodSync(CA_KEY, 0o600);
+    }
+    if (!fs.existsSync(TLS_KEY)) {
+      execFileSync("openssl", ["genrsa", "-out", TLS_KEY, "2048"], { stdio: "ignore" });
+      fs.chmodSync(TLS_KEY, 0o600);
+    }
+
+    const ips = Object.values(os.networkInterfaces()).flat().filter(Boolean)
+      .filter(item => item.family === "IPv4" && !item.internal).map(item => item.address);
+    const uniqueIps = [...new Set(["127.0.0.1", ...ips])];
+    const altNames = uniqueIps.map((ip, i) => `IP.${i + 1} = ${ip}`).join("\\n");
+    const config = [
+      "[req]", "distinguished_name = dn", "prompt = no", "[dn]",
+      "CN = Termux LAN Server", "[server_ext]", "subjectAltName = @alt_names",
+      "keyUsage = digitalSignature, keyEncipherment", "extendedKeyUsage = serverAuth",
+      "[alt_names]", altNames, ""
+    ].join("\\n");
+    const configFile = path.join(CERT_DIR, "server-openssl.cnf");
+    const csrFile = path.join(CERT_DIR, "server.csr");
+    fs.writeFileSync(configFile, config);
+    execFileSync("openssl", ["req", "-new", "-key", TLS_KEY, "-out", csrFile,
+      "-config", configFile], { stdio: "ignore" });
+    execFileSync("openssl", ["x509", "-req", "-in", csrFile, "-CA", CA_CERT,
+      "-CAkey", CA_KEY, "-CAcreateserial", "-out", TLS_CERT, "-days", "365",
+      "-sha256", "-extfile", configFile, "-extensions", "server_ext"], { stdio: "ignore" });
+    fs.copyFileSync(CA_CERT, path.join(ROOT, "lan-ca.crt"));
+    return { key: fs.readFileSync(TLS_KEY), cert: fs.readFileSync(TLS_CERT), ips };
+  } catch (error) {
+    console.error("[https] HTTPS certificate setup failed:", error.message);
+    console.error("[https] Install OpenSSL in Termux with: pkg install openssl-tool");
+    return null;
+  }
+}
 
 function reply(res, status, value) {
   if (res.destroyed || res.writableEnded) return;
@@ -197,12 +248,15 @@ function closeTerminal(res, data) {
   return reply(res, 200, { ok: true });
 }
 
-const server = http.createServer((req, res) => {
+const requestHandler = (req, res) => {
   void handleRequest(req, res).catch(error => {
     console.error("[request] Unhandled request error:", error);
     reply(res, 500, { error: "Internal server error. The server is still running." });
   });
-});
+};
+const server = http.createServer(requestHandler);
+const tls = ensureLanTls();
+const secureServer = tls ? https.createServer({ key: tls.key, cert: tls.cert }, requestHandler) : null;
 
 async function handleRequest(req, res) {
   let url;
@@ -343,7 +397,11 @@ function shutdown() {
     clearTimeout(session.idleTimer);
     try { session.child.kill("SIGTERM"); } catch {}
   }
-  server.close(() => process.exit(0));
+  server.close(() => {
+    if (secureServer) secureServer.close(() => process.exit(0));
+    else process.exit(0);
+  });
+  if (secureServer) secureServer.close();
   setTimeout(() => process.exit(1), 5000).unref();
 }
 process.on("SIGTERM", shutdown);
@@ -357,7 +415,17 @@ process.on("uncaughtException", error => {
 server.listen(PORT, HOST, () => {
   const ips = Object.values(os.networkInterfaces()).flat().filter(Boolean)
     .filter(item => item.family === "IPv4" && !item.internal).map(item => item.address);
-  console.log("[server] LAN terminal listening on port " + PORT);
+  console.log("[server] LAN terminal listening on HTTP port " + PORT);
   for (const ip of ips) console.log("http://" + ip + ":" + PORT);
+  if (secureServer) {
+    secureServer.listen(HTTPS_PORT, HOST, () => {
+      console.log("[https] Secure LAN address for WebGPU:");
+      for (const ip of tls.ips.filter(ip => ip !== "127.0.0.1")) {
+        console.log("https://" + ip + ":" + HTTPS_PORT);
+      }
+      console.log("[https] Download the CA certificate from http://<phone-ip>:" + PORT + "/lan-ca.crt");
+      console.log("[https] Trust lan-ca.crt on the browser device once, then open the HTTPS address.");
+    });
+  }
   console.log("[server] PID " + process.pid);
 });
