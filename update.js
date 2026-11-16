@@ -116,10 +116,25 @@ async function main() {
     log("[update] Files updated. Asking the server to restart under the watchdog.");
     setStatus("updated", "Update installed successfully. Your local changes were preserved. Restarting the server…");
 
-    // The updater is a child of server.js. The watchdog will relaunch the server
-    // after this signal, loading the newly downloaded code.
-    try { process.kill(process.ppid, "SIGTERM"); }
-    catch (error) { throw new Error("Files updated, but could not signal the server to restart: " + error.message); }
+    // The updater is normally a child of server.js. Signal only that server
+    // process; watchdog.js remains alive and starts a fresh server.js process.
+    // If update.js was launched manually, do not accidentally signal the shell.
+    const parentPid = process.ppid;
+    let parentCommand = "";
+    try {
+      parentCommand = fs.readFileSync(`/proc/${parentPid}/cmdline`, "utf8")
+        .split("\\0").filter(Boolean).join(" ");
+    } catch {}
+    if (parentCommand.includes(path.join(ROOT, "server.js"))) {
+      try { process.kill(parentPid, "SIGTERM"); }
+      catch (error) {
+        throw new Error("Files updated, but could not signal server.js to restart: " + error.message);
+      }
+      log("[update] Sent restart signal to server.js only. The watchdog remains running.");
+    } else {
+      log("[update] Update completed. No server restart signal sent because update.js was not launched by server.js.");
+      setStatus("updated", "Update installed. Restart the server manually when ready.");
+    }
   } catch (error) {
     if (localStash) {
       try {
