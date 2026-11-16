@@ -238,6 +238,16 @@ async function handleRequest(req, res) {
       return closeTerminal(res, data);
     }
 
+    if (req.method === "GET" && url.pathname === "/api/update/status") {
+      try {
+        const statusFile = path.resolve("logs/update-status.json");
+        const status = JSON.parse(await fs.promises.readFile(statusFile, "utf8"));
+        return reply(res, 200, status);
+      } catch {
+        return reply(res, 200, { status: "idle", message: "No update has been run yet." });
+      }
+    }
+
     if (req.method === "POST" && url.pathname === "/api/update") {
       if (updateInProgress) return reply(res, 409, { error: "An update is already running." });
       updateInProgress = true;
@@ -253,6 +263,13 @@ async function handleRequest(req, res) {
       updater.once("error", error => {
         updateInProgress = false;
         console.error("[update] Could not start updater:", error.message);
+        try {
+          fs.mkdirSync("logs", { recursive: true });
+          fs.writeFileSync("logs/update-status.json", JSON.stringify({
+            status: "failed", message: "Could not start updater: " + error.message,
+            updatedAt: new Date().toISOString()
+          }, null, 2));
+        } catch {}
       });
       updater.once("exit", code => {
         updateInProgress = false;
