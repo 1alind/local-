@@ -2,34 +2,15 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
 const ROOT = path.resolve("public");
-const TOKEN_FILE = path.resolve(".local-token");
 const MAX_BODY = 2048;
 const MAX_OUTPUT = 60000;
 let shuttingDown = false;
 let updateInProgress = false;
-
-function loadToken() {
-  try {
-    if (fs.existsSync(TOKEN_FILE)) {
-      const value = fs.readFileSync(TOKEN_FILE, "utf8").trim();
-      if (value.length >= 32) return value;
-      throw new Error("Token file is invalid. Remove .local-token and restart.");
-    }
-    const value = crypto.randomBytes(32).toString("hex");
-    fs.writeFileSync(TOKEN_FILE, value, { mode: 0o600, flag: "wx" });
-    return value;
-  } catch (error) {
-    console.error("[startup] Cannot load token:", error.message);
-    process.exit(1);
-  }
-}
-const TOKEN = loadToken();
 
 const COMMANDS = {
   pwd: ["pwd", []],
@@ -57,13 +38,6 @@ function reply(res, status, value) {
     console.error("[http] Failed to send response:", error.message);
     res.destroy();
   }
-}
-
-function authorized(req) {
-  const supplied = (req.headers.authorization || "").replace(/^Bearer /, "");
-  const a = Buffer.from(supplied);
-  const b = Buffer.from(TOKEN);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 function isPrivateAddress(address = "") {
@@ -157,7 +131,6 @@ async function handleRequest(req, res) {
 
   if (url.pathname.startsWith("/api/")) {
     if (!isPrivateAddress(req.socket.remoteAddress || "")) return reply(res, 403, { error: "Private network connections only" });
-    if (!authorized(req)) return reply(res, 401, { error: "Enter the dashboard token" });
 
     if (req.method === "GET" && url.pathname === "/api/status") {
       return reply(res, 200, {
@@ -284,6 +257,5 @@ server.listen(PORT, HOST, () => {
     .map(item => item.address);
   console.log("[server] LAN dashboard listening on port " + PORT);
   for (const ip of ips) console.log("http://" + ip + ":" + PORT);
-  console.log("[server] Authentication token: " + TOKEN);
   console.log("[server] PID " + process.pid);
 });
