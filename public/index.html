@@ -27,13 +27,6 @@
     <div id="status" class="status"><span class="dot"></span>Disconnected</div>
   </header>
 
-  <section id="login" class="panel">
-    <div class="headrow"><h2>Connect to your phone</h2></div>
-    <label for="token">Dashboard token from the Termux startup screen</label>
-    <div class="loginrow"><input id="token" type="password" autocomplete="off" placeholder="Paste your token"><button id="connect" class="primary">Connect</button></div>
-    <p class="hint">The token stays in this browser. Only use this dashboard on a trusted Wi-Fi network.</p>
-  </section>
-
   <section id="dashboard" class="hidden">
     <div class="panel">
       <div class="headrow"><h2>Device commands</h2><button id="refresh">Refresh status</button></div>
@@ -57,7 +50,7 @@
       <pre id="output">Choose a command above. Its output will appear here.</pre>
     </div>
   </section>
-  <p class="hint">LAN-only prototype. Commands are deliberately limited to a safe diagnostic list for now. Do not expose the phone's port through router port-forwarding.</p>
+  <p class="hint">LAN-only dashboard. Anyone on the same private network can access its diagnostic commands and update action. Do not expose the phone's port through router port-forwarding.</p>
 </main>
 <script src="/app.js"></script>
 </body>
