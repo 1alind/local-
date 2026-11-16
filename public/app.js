@@ -91,6 +91,25 @@ $("refresh").addEventListener("click", async () => {
   try { await checkStatus(); $("output").textContent = "Connection is healthy."; }
   catch { setStatus(false, "Phone offline"); scheduleReconnect(); }
 });
+$("update").addEventListener("click", async () => {
+  if (busy) return;
+  if (!confirm("Check GitHub for an update and install it if available? The server may restart.")) return;
+  busy = true;
+  $("update").disabled = true;
+  $("updateHint").textContent = "Checking GitHub and preparing the update…";
+  $("output").textContent = "Update check started. Keep the phone and Termux running.";
+  try {
+    const result = await api("/api/update", { method: "POST", body: "{}" });
+    $("updateHint").textContent = result.message || "Update process started.";
+    $("output").textContent = result.message || "Update process started. The dashboard will reconnect after a restart.";
+  } catch (error) {
+    $("updateHint").textContent = "Could not start update: " + error.message;
+    $("output").textContent = error.message;
+  } finally {
+    busy = false;
+    $("update").disabled = false;
+  }
+});
 $("clear").addEventListener("click", () => $("output").textContent = "");
 document.querySelectorAll(".cmd").forEach(button => button.addEventListener("click", () => run(button.dataset.cmd, button)));
 window.addEventListener("online", () => { if (token) scheduleReconnect(); });
