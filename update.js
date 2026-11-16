@@ -16,12 +16,12 @@ function setStatus(status, message) {
       status, message, updatedAt: new Date().toISOString()
     }, null, 2));
   } catch (error) {
-    process.stderr.write("[update] Could not save status: " + error.message + "\\n");
+    process.stderr.write("[update] Could not save status: " + error.message + "\n");
   }
 }
 
 function log(...parts) {
-  const line = new Date().toISOString() + " " + parts.join(" ") + "\\n";
+  const line = new Date().toISOString() + " " + parts.join(" ") + "\n";
   process.stdout.write(line);
   try { fs.appendFileSync(LOG_FILE, line); } catch {}
 }
@@ -51,37 +51,86 @@ function git(args, timeout = 120000) {
   });
 }
 
+async function restoreLocalChanges(stashRef) {
+  if (!stashRef) return;
+  log("[update] Restoring the automatic local-change backup", stashRef + "…");
+  try {
+    await git(["stash", "apply", "--index", stashRef]);
+    await git(["stash", "drop", stashRef]);
+    log("[update] Local changes restored successfully.");
+  } catch (error) {
+    setStatus(
+      "restore_needed",
+      "The update was installed, but some local changes could not be merged automatically. Your backup is محفوظ in Git stash; no local changes were deleted. Resolve the conflict and run: git stash list"
+    );
+    throw new Error("Update installed, but restoring local changes needs conflict resolution. Your backup is still محفوظ in Git stash. " + error.message);
+  }
+}
+
 async function main() {
-  setStatus("checking", "Checking the GitHub repository…");
+  setStatus("checking", "Checking for updates and protecting local changes…");
   log("[update] Starting update check.");
   const inside = await git(["rev-parse", "--is-inside-work-tree"]);
   if (inside !== "true") throw new Error("This folder is not a Git repository.");
 
   const changes = await git(["status", "--porcelain"]);
-  if (changes) throw new Error("Local project files have changes. Update cancelled to protect them. Commit or back up your changes, then try again.");
+  let localStash = null;
 
-  const upstream = await git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
-  if (!upstream || !upstream.includes("/")) throw new Error("No Git upstream is configured for this branch.");
-
-  log("[update] Fetching latest GitHub changes from", upstream + "…");
-  await git(["fetch", "--prune", "origin"], 180000);
-
-  const count = await git(["rev-list", "--count", "HEAD.." + upstream]);
-  if (Number(count) === 0) {
-    log("[update] Already up to date. No restart needed.");
-    setStatus("up_to_date", "Already up to date. No new version is available.");
-    return;
+  if (changes) {
+    const previousStash = await git(["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
+    log("[update] Local changes found. Saving them automatically before updating.");
+    await git(["stash", "push", "-u", "-m", "local-control automatic update backup"]);
+    const currentStash = await git(["rev-parse", "-q", "--verify", "refs/stash"]).catch(() => "");
+    const remaining = await git(["status", "--porcelain"]);
+    if (remaining) {
+      throw new Error("Could not safely prepare all local changes for the update. Nothing was overwritten. Remaining changes: " + remaining);
+    }
+    if (currentStash && currentStash !== previousStash) {
+      localStash = "stash@{0}";
+      log("[update] Local changes safely backed up in", localStash + ".");
+    } else {
+      throw new Error("Git could not create a backup of the local changes. No update was applied.");
+    }
   }
 
-  log("[update] Found", count, "new commit(s). Installing with fast-forward only.");
-  await git(["pull", "--ff-only", "origin", upstream.split("/").slice(1).join("/")], 180000);
-  log("[update] Files updated. Asking the server to restart under the watchdog.");
-  setStatus("updated", "Update installed successfully. Restarting the server…");
+  try {
+    const upstream = await git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+    if (!upstream || !upstream.includes("/")) throw new Error("No Git upstream is configured for this branch.");
 
-  // The updater is a child of server.js. The watchdog will relaunch the server
-  // after this signal, loading the newly downloaded code.
-  try { process.kill(process.ppid, "SIGTERM"); }
-  catch (error) { throw new Error("Files updated, but could not signal the server to restart: " + error.message); }
+    log("[update] Fetching latest GitHub changes from", upstream + "…");
+    await git(["fetch", "--prune", "origin"], 180000);
+
+    const count = await git(["rev-list", "--count", "HEAD.." + upstream]);
+    if (Number(count) === 0) {
+      log("[update] Already up to date. No restart needed.");
+      if (localStash) await restoreLocalChanges(localStash);
+      setStatus("up_to_date", "Already up to date. Your local changes were preserved.");
+      return;
+    }
+
+    log("[update] Found", count, "new commit(s). Installing with fast-forward only.");
+    await git(["pull", "--ff-only", "origin", upstream.split("/").slice(1).join("/")], 180000);
+
+    if (localStash) await restoreLocalChanges(localStash);
+
+    log("[update] Files updated. Asking the server to restart under the watchdog.");
+    setStatus("updated", "Update installed successfully. Your local changes were preserved. Restarting the server…");
+
+    // The updater is a child of server.js. The watchdog will relaunch the server
+    // after this signal, loading the newly downloaded code.
+    try { process.kill(process.ppid, "SIGTERM"); }
+    catch (error) { throw new Error("Files updated, but could not signal the server to restart: " + error.message); }
+  } catch (error) {
+    if (localStash) {
+      try {
+        const status = await git(["status", "--porcelain"]);
+        if (!status) await restoreLocalChanges(localStash);
+      } catch (restoreError) {
+        log("[update] Automatic restoration after update failure also needs attention:", restoreError.message);
+      }
+    }
+    throw error;
+  }
 }
 
 main().catch(error => {
